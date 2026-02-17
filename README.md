@@ -12,7 +12,7 @@ Aplikacja ułatwiająca trzymanie czasu odjazdu zgodnie z rozkładem jazd nocnyc
 Pliki instalacyjne APK nie są przechowywane w repozytorium. Możesz pobrać je z mojego serwera QNAP:
 [Folder z plikami APK](http://192.168.1.253:8080/share.cgi?ssid=457eac31cb81411aad80218ffd417dbd)
 
-**Folder jest zabezpieczony hasłem. W celu uzyskania hasła napisz do mnie prywatną wiadomość (np. przez GitHub lub e-mail).**
+**Folder jest zabezpieczony hasłem. W celu uzyskania hasła napisz do mnie na mój numer telefonu.**
 
 **Opis plików APK:**
 - `app-armeabi-v7a-release.apk` – dla starszych urządzeń z procesorem ARM 32-bit (np. starsze telefony z Androidem)
