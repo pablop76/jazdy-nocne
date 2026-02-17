@@ -297,19 +297,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                     minute,
                                     0,
                                   );
-                                  _manualTimeMode = false;
+                                  _manualTimeMode = true; // Pozostajemy w trybie ręcznym
                                   // Aktualizuj kontrolery
                                   _hourController.text = hour.toString().padLeft(2, '0');
                                   _minuteController.text = minute.toString().padLeft(2, '0');
                                 });
-                                // Wznów timer
-                                _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-                                  if (mounted) {
-                                    setState(() {
-                                      _currentTime = _currentTime.add(const Duration(seconds: 1));
-                                    });
-                                  }
-                                });
+                                // NIE wznawiamy timera w trybie ręcznym
                               } else {
                                 // Jeśli nieprawidłowe dane, zamknij edycję i wznów timer
                                 setState(() {
