@@ -21,4 +21,6 @@ Pliki instalacyjne APK nie są przechowywane w repozytorium. Możesz pobrać je 
 
 Najczęściej wybieraj plik `app-arm64-v8a-release.apk` – pasuje do większości współczesnych smartfonów.
 
+**Aplikacja nie jest dostępna dla urządzeń Apple (iOS) – kompilacja i instalacja na iPhone/iPad wymaga komputera Mac i nie jest możliwa bezpośrednio z Windows.**
+
 Aplikacja przeznaczona wyłącznie do użytku prywatnego. Nie używaj podczas prowadzenia pociągu!
