@@ -21,6 +21,12 @@ Pliki instalacyjne APK nie są przechowywane w repozytorium. Możesz pobrać je 
 
 Najczęściej wybieraj plik `app-arm64-v8a-release.apk` – pasuje do większości współczesnych smartfonów.
 
-**Aplikacja nie jest dostępna dla urządzeń Apple (iOS) – kompilacja i instalacja na iPhone/iPad wymaga komputera Mac i nie jest możliwa bezpośrednio z Windows.**
+**Instrukcja dla użytkowników Maca (kompilacja na iOS):**
+1. Sklonuj repozytorium na Macu: `git clone https://github.com/pablop76/jazdy-nocne.git`
+2. Otwórz katalog projektu w terminalu: `cd jazdy-nocne/flutter_application_1`
+3. Zainstaluj zależności: `flutter pub get`
+4. Otwórz projekt w Xcode: `open ios/Runner.xcworkspace`
+5. Skonfiguruj podpisywanie aplikacji (Apple Developer Account).
+6. Zbuduj i zainstaluj aplikację na iPhone/iPad: `flutter build ios` lub bezpośrednio z Xcode.
 
 Aplikacja przeznaczona wyłącznie do użytku prywatnego. Nie używaj podczas prowadzenia pociągu!
