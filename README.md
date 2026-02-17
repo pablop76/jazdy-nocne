@@ -9,8 +9,8 @@ Aplikacja ułatwiająca trzymanie czasu odjazdu zgodnie z rozkładem jazd nocnyc
 - Wybór dnia, kierunku, obiegu
 - Przyciemnianie ekranu i blokada wygaszania
 
-Pliki instalacyjne APK znajdziesz w katalogu:
-`build/app/outputs/flutter-apk/`
+Pliki instalacyjne APK nie są przechowywane w repozytorium. Możesz pobrać je z mojego serwera QNAP:
+[Folder z plikami APK](http://192.168.1.253:8080/share.cgi?ssid=457eac31cb81411aad80218ffd417dbd)
 Wybierz plik odpowiedni dla architektury Twojego urządzenia.
 
 Aplikacja przeznaczona wyłącznie do użytku prywatnego. Nie używaj podczas prowadzenia pociągu!
