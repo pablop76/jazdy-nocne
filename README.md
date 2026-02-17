@@ -1,16 +1,12 @@
-# flutter_application_1
+# Jazdy nocne
 
-A new Flutter project.
+Aplikacja ułatwiająca trzymanie czasu odjazdu zgodnie z rozkładem jazd nocnych dla pociągów metra warszawskiego na pierwszej linii metra.
 
-## Getting Started
+**Funkcje aplikacji:**
+- Wyświetlanie stacji i rozkładów nocnych
+- Odliczanie czasu do odjazdu/przyjazdu
+- Tryb ręcznego ustawiania czasu
+- Wybór dnia, kierunku, obiegu
+- Przyciemnianie ekranu i blokada wygaszania
 
-This project is a starting point for a Flutter application.
-
-A few resources to get you started if this is your first Flutter project:
-
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+Aplikacja przeznaczona wyłącznie do użytku prywatnego. Nie używaj podczas prowadzenia pociągu!
