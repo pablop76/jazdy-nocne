@@ -66,16 +66,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
-    if (state == AppLifecycleState.resumed) {
-      // Po wznowieniu aplikacji aktualizuj czas tylko jeśli NIE jesteśmy w trybie ręcznym
-      if (!_manualTimeMode) {
-        setState(() {
-          _currentTime = DateTime.now();
-          _hourController.text = _currentTime.hour.toString().padLeft(2, '0');
-          _minuteController.text = _currentTime.minute.toString().padLeft(2, '0');
-        });
-      }
-    }
+    // Nie resetuj _currentTime po wznowieniu aplikacji!
+    // Timer w trybie rzeczywistym sam aktualizuje czas, a w trybie ręcznym czas nie powinien być nadpisywany.
   }
 
   void _scrollToActiveStation(int index) {
@@ -238,7 +230,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 if (_manualTimeMode)
                   Column(
                     children: [
-                      // Pola do wpisania godziny i minuty
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
@@ -297,109 +288,37 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                     minute,
                                     0,
                                   );
-                                  _manualTimeMode = true; // Pozostajemy w trybie ręcznym
-                                  // Aktualizuj kontrolery
+                                  _manualTimeMode = false; // zamknij panel edycji
                                   _hourController.text = hour.toString().padLeft(2, '0');
                                   _minuteController.text = minute.toString().padLeft(2, '0');
                                 });
-                                // NIE wznawiamy timera w trybie ręcznym
-                              } else {
-                                // Jeśli nieprawidłowe dane, zamknij edycję i wznów timer
-                                setState(() {
-                                  _manualTimeMode = false;
-                                });
-                                _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-                                  if (mounted) {
-                                    setState(() {
-                                      _currentTime = _currentTime.add(const Duration(seconds: 1));
-                                    });
-                                  }
-                                });
+                                FocusScope.of(context).unfocus();
                               }
-                              FocusScope.of(context).unfocus();
                             },
                             child: const Text('USTAW', style: TextStyle(fontWeight: FontWeight.bold)),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 8),
-                      // Szybkie skoki (+/- 15 min)
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          TextButton(
-                            onPressed: () {
-                              setState(() {
-                                _currentTime = _currentTime.subtract(const Duration(minutes: 15));
-                              });
-                            },
-                            child: const Text('-15m', style: TextStyle(fontSize: 12)),
-                          ),
-                          const SizedBox(width: 8),
-                          TextButton(
-                            onPressed: () {
-                              setState(() {
-                                _currentTime = _currentTime.add(const Duration(minutes: 15));
-                              });
-                            },
-                            child: const Text('+15m', style: TextStyle(fontSize: 12)),
-                          ),
-                        ],
-                      ),
-                      // Precyzyjne skoki (+/- 1 min, +/- 10 sek)
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          IconButton(
-                            icon: const Icon(Icons.remove_circle, size: 28),
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(),
-                            onPressed: () {
-                              setState(() {
-                                _currentTime = _currentTime.subtract(const Duration(minutes: 1));
-                              });
-                            },
-                            tooltip: '-1 min',
-                          ),
-                          const SizedBox(width: 12),
-                          IconButton(
-                            icon: const Icon(Icons.remove, size: 20),
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(),
-                            onPressed: () {
-                              setState(() {
-                                _currentTime = _currentTime.subtract(const Duration(seconds: 10));
-                              });
-                            },
-                            tooltip: '-10 sek',
-                          ),
-                          const SizedBox(width: 24),
-                          IconButton(
-                            icon: const Icon(Icons.add, size: 20),
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(),
-                            onPressed: () {
-                              setState(() {
-                                _currentTime = _currentTime.add(const Duration(seconds: 10));
-                              });
-                            },
-                            tooltip: '+10 sek',
-                          ),
-                          const SizedBox(width: 12),
-                          IconButton(
-                            icon: const Icon(Icons.add_circle, size: 28),
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(),
-                            onPressed: () {
-                              setState(() {
-                                _currentTime = _currentTime.add(const Duration(minutes: 1));
-                              });
-                            },
-                            tooltip: '+1 min',
-                          ),
-                        ],
-                      ),
                     ],
+                  ),
+                if (!_manualTimeMode)
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton.icon(
+                      icon: const Icon(Icons.edit, size: 18, color: Colors.grey),
+                      label: const Text('Edycja', style: TextStyle(color: Colors.grey, fontSize: 13)),
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        minimumSize: Size(0, 0),
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        visualDensity: VisualDensity.compact,
+                      ),
+                      onPressed: () {
+                        setState(() {
+                          _manualTimeMode = true;
+                        });
+                      },
+                    ),
                   ),
                 GestureDetector(
                   onTap: () {
@@ -427,11 +346,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                           color: _manualTimeMode ? Colors.orange : null,
                         ),
                       ),
-                      if (_manualTimeMode)
-                        const Padding(
-                          padding: EdgeInsets.only(left: 8),
-                          child: Icon(Icons.edit, color: Colors.orange, size: 24),
-                        ),
+                      // ...ikona edycji usunięta...
                     ],
                   ),
                 ),
