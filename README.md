@@ -19,7 +19,7 @@ Pliki instalacyjne APK nie są przechowywane w repozytorium. Możesz pobrać je 
 - `app-arm64-v8a-release.apk` – dla większości nowoczesnych urządzeń z Androidem (smartfony, tablety z procesorem ARM 64-bit) – to najpopularniejszy wybór
 - `app-x86_64-release.apk` – dla urządzeń z procesorem x86_64 (np. niektóre emulatory)
 
-Najczęściej wybieraj plik `app-arm64-v8a-release.apk` – pasuje do większości współczesnych smartfonów.
+Najczęściej wybieraj plik `Jazdy_nocne_V2_4.apk` – pasuje do większości współczesnych smartfonów.
 
 **Instrukcja dla użytkowników Maca (kompilacja na iOS):**
 1. Sklonuj repozytorium na Macu: `git clone https://github.com/pablop76/jazdy-nocne.git`
