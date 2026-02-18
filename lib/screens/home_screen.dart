@@ -292,6 +292,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                   _hourController.text = hour.toString().padLeft(2, '0');
                                   _minuteController.text = minute.toString().padLeft(2, '0');
                                 });
+                                _timer.cancel();
+                                _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+                                  if (mounted) {
+                                    setState(() {
+                                      _currentTime = _currentTime.add(const Duration(seconds: 1));
+                                    });
+                                  }
+                                });
                                 FocusScope.of(context).unfocus();
                               }
                             },
