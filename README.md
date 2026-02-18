@@ -16,7 +16,7 @@ Pliki instalacyjne APK nie są przechowywane w repozytorium. Możesz pobrać je 
 
 **Opis plików APK:**
 - `app-armeabi-v7a-release.apk` – dla starszych urządzeń z procesorem ARM 32-bit (np. starsze telefony z Androidem)
-- `app-arm64-v8a-release.apk` – dla większości nowoczesnych urządzeń z Androidem (smartfony, tablety z procesorem ARM 64-bit) – to najpopularniejszy wybór
+- `Jazdy_nocne_V2_4.apk` – dla większości nowoczesnych urządzeń z Androidem (smartfony, tablety z procesorem ARM 64-bit) – to najpopularniejszy wybór
 - `app-x86_64-release.apk` – dla urządzeń z procesorem x86_64 (np. niektóre emulatory)
 
 Najczęściej wybieraj plik `Jazdy_nocne_V2_4.apk` – pasuje do większości współczesnych smartfonów.
