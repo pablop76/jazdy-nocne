@@ -10,7 +10,7 @@ Aplikacja ułatwiająca trzymanie czasu odjazdu zgodnie z rozkładem jazd nocnyc
 - Przyciemnianie ekranu i blokada wygaszania
 
 Pliki instalacyjne APK nie są przechowywane w repozytorium. Możesz pobrać je z mojego serwera QNAP:
-[Folder z plikami APK](https://www.myqnapcloud.com/smartshare/76f015l9n2opo66q107zw34d_4dg1ij6ii0p82834r6v66y8558e5d6fj)
+[Folder z plikami APK](https://www.myqnapcloud.com/smartshare/76f015l9n2opo66q107zw34d_230iig3h6kkn2r1914t2xva2675c5d83)
 
 **Folder jest zabezpieczony hasłem. W celu uzyskania hasła napisz do mnie na mój numer telefonu.**
 
