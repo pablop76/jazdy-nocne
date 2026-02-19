@@ -35,8 +35,6 @@ Aplikacja przeznaczona wyłącznie do użytku prywatnego. Nie używaj podczas pr
 
 - Dodano obsługę dwóch linii metra: `M1` i `M2`.
 - Dodano przełącznik linii w UI oraz dynamiczny wybór kierunku i obiegu zależnie od wybranej linii.
-- Dla `M2` dodano rozkład z osobnymi kierunkami `Bemowo`/`Bródno` oraz logikę: godziny wspólne dla piątku i soboty, zmienne przypisanie obiegów.
-- Uzupełniono pełne nazwy stacji `M2` (np. `C11 - Świętokrzyska`) w danych.
 - Poprawiono widok aktywnej stacji pod zegarem:
 	- osobna etykieta `Kierunek` z aktualnym `Obiegiem`,
 	- poprawiona czytelność kolorystyczna,
