@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import '../data/route_data.dart';
+import '../data/route_data_m2.dart';
 import '../models/route_point.dart';
 import '../widgets/route_point_card.dart';
 
@@ -13,6 +14,8 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
+enum MetroLine { m1, m2 }
+
 class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   static const double _cardHeight = 120.0; // Stała wysokość karty
   late Timer _timer;
@@ -22,6 +25,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   final AudioPlayer _audioPlayer = AudioPlayer(); // Player do dźwięku powitalnego
   // Aktualny czas (rzeczywisty)
   DateTime _currentTime = DateTime.now();
+  MetroLine _metroLine = MetroLine.m1;
   Direction _direction = Direction.mlociny;
   DayType _dayType = DayType.saturday; // Piątek lub Sobota/Niedziela
   int _selectedCircuit = 1;
@@ -89,6 +93,29 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final hour = _currentTime.hour;
     // Nocne kursy: od 00:00 do około 03:00
     return hour >= 0 && hour < 4;
+  }
+
+  List<int> _getCurrentCircuits() {
+    if (_metroLine == MetroLine.m1) {
+      return RouteData.availableCircuits;
+    }
+
+    return RouteDataM2.getAvailableCircuits(_direction, _dayType);
+  }
+
+  void _normalizeSelectedCircuit() {
+    final circuits = _getCurrentCircuits();
+    if (circuits.isEmpty) return;
+    if (!circuits.contains(_selectedCircuit)) {
+      _selectedCircuit = circuits.first;
+    }
+  }
+
+  String _directionLabelForPoint(RoutePoint point) {
+    if (point.stationId.startsWith('C')) {
+      return _direction == Direction.mlociny ? '→ Bemowo' : '→ Bródno';
+    }
+    return _direction == Direction.mlociny ? '→ Młociny' : '→ Kabaty';
   }
 
   @override
@@ -173,8 +200,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       );
     }
 
-    // Stacje dla wybranego kierunku i dnia (21 stacji)
-    final routePoints = RouteData.getRoute(_direction, _dayType);
+    // Stacje dla wybranej linii, kierunku i dnia
+    final routePoints = _metroLine == MetroLine.m1
+      ? RouteData.getRoute(_direction, _dayType)
+      : RouteDataM2.getRoute(_direction, _dayType);
+
+    _normalizeSelectedCircuit();
     
     // Sprawdź czy jesteśmy w godzinach nocnych
     final isNightTime = _isNightServiceTime();
@@ -212,12 +243,40 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         Positioned.fill(
           child: Scaffold(
             appBar: AppBar(
-              title: const Text('Metro M1 - Jazdy Nocne'),
+              title: const Text('Metro - Jazdy Nocne'),
               centerTitle: true,
               backgroundColor: Theme.of(context).colorScheme.primaryContainer,
             ),
             body: Column(
         children: [
+          // Wybór linii metra
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Text('Linia: ', style: TextStyle(fontWeight: FontWeight.bold)),
+                const SizedBox(width: 8),
+                SegmentedButton<MetroLine>(
+                  showSelectedIcon: false,
+                  segments: const [
+                    ButtonSegment(value: MetroLine.m1, label: Text('M1')),
+                    ButtonSegment(value: MetroLine.m2, label: Text('M2')),
+                  ],
+                  selected: {_metroLine},
+                  onSelectionChanged: (newSelection) {
+                    setState(() {
+                      _metroLine = newSelection.first;
+                      _direction = Direction.mlociny;
+                      _normalizeSelectedCircuit();
+                      _initialScrollDone = false;
+                      _lastActiveStationId = null;
+                    });
+                  },
+                ),
+              ],
+            ),
+          ),
           // Nagłówek z aktualnym czasem
           Container(
             width: double.infinity,
@@ -360,47 +419,74 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 ),
                 const SizedBox(height: 8),
                 if (primaryActivePoint != null)
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
+                  Column(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: Colors.green,
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Text(
-                              '🚇',
-                              style: TextStyle(fontSize: 20),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: Colors.green,
+                              borderRadius: BorderRadius.circular(20),
                             ),
-                            const SizedBox(width: 8),
-                            Text(
-                              primaryActivePoint.name,
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Text(
+                                  '🚇',
+                                  style: TextStyle(fontSize: 20),
+                                ),
+                                const SizedBox(width: 8),
+                                Flexible(
+                                  child: Text(
+                                    primaryActivePoint.name,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: Colors.green.shade700,
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Text(
+                              primaryActivePoint.getNearestScheduledTime(_currentTime, _selectedCircuit) ?? "--:--",
                               style: const TextStyle(
                                 color: Colors.white,
                                 fontSize: 16,
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 8),
+                      const SizedBox(height: 4),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(
-                          color: Colors.green.shade700,
-                          borderRadius: BorderRadius.circular(20),
+                          color: Colors.amber.shade100,
+                          borderRadius: BorderRadius.circular(12),
                         ),
                         child: Text(
-                          primaryActivePoint.getNearestScheduledTime(_currentTime, _selectedCircuit) ?? "--:--",
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
+                          'Kierunek: ${_directionLabelForPoint(primaryActivePoint)}   Obieg: $_selectedCircuit',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: Colors.brown.shade900,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
                           ),
                         ),
                       ),
@@ -470,13 +556,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         ButtonSegment(
                           value: DayType.saturday,
                           label: Text('Sobota'),
-                          icon: Icon(Icons.weekend),
+                          icon: Icon(Icons.nights_stay),
                         ),
                       ],
                       selected: {_dayType},
                       onSelectionChanged: (newSelection) {
                         setState(() {
                           _dayType = newSelection.first;
+                          _normalizeSelectedCircuit();
+                          _initialScrollDone = false;
+                          _lastActiveStationId = null;
                         });
                       },
                     ),
@@ -505,22 +594,38 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                           return Colors.grey;
                         }),
                       ),
-                      segments: const [
-                        ButtonSegment(
-                          value: Direction.mlociny,
-                          label: Text('Młociny'),
-                          icon: Icon(Icons.train),
-                        ),
-                        ButtonSegment(
-                          value: Direction.kabaty,
-                          label: Text('Kabaty'),
-                          icon: Icon(Icons.train),
-                        ),
-                      ],
+                      segments: _metroLine == MetroLine.m1
+                          ? const [
+                              ButtonSegment(
+                                value: Direction.mlociny,
+                                label: Text('Młociny'),
+                                icon: Icon(Icons.train),
+                              ),
+                              ButtonSegment(
+                                value: Direction.kabaty,
+                                label: Text('Kabaty'),
+                                icon: Icon(Icons.train),
+                              ),
+                            ]
+                          : const [
+                              ButtonSegment(
+                                value: Direction.mlociny,
+                                label: Text('Bemowo'),
+                                icon: Icon(Icons.train),
+                              ),
+                              ButtonSegment(
+                                value: Direction.kabaty,
+                                label: Text('Bródno'),
+                                icon: Icon(Icons.train),
+                              ),
+                            ],
                       selected: {_direction},
                       onSelectionChanged: (newSelection) {
                         setState(() {
                           _direction = newSelection.first;
+                          _normalizeSelectedCircuit();
+                          _initialScrollDone = false;
+                          _lastActiveStationId = null;
                         });
                       },
                     ),
@@ -542,7 +647,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   child: SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
                     child: Row(
-                      children: RouteData.availableCircuits.map((circuit) {
+                      children: _getCurrentCircuits().map((circuit) {
                         final isSelected = circuit == _selectedCircuit;
                         return Padding(
                           padding: const EdgeInsets.only(right: 8),
@@ -695,7 +800,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   },
                 )
               : Center(
-                  child: Padding(
+                  child: SingleChildScrollView(
                     padding: const EdgeInsets.all(32),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,

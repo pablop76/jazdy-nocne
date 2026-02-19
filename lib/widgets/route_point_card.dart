@@ -22,6 +22,15 @@ class RoutePointCard extends StatelessWidget {
 
   /// Sprawdza czy to stacja końcowa dla danego kierunku
   bool get isTerminalStation {
+    // M2: kody stacji C4..C21
+    if (point.stationId.startsWith('C')) {
+      if (direction == Direction.mlociny) {
+        return point.stationId == 'C4'; // kierunek Bemowo
+      }
+      return point.stationId == 'C21'; // kierunek Bródno
+    }
+
+    // M1: kody stacji A1..A23
     if (direction == Direction.mlociny) {
       return point.stationId == 'A23'; // Młociny
     } else {
@@ -34,6 +43,14 @@ class RoutePointCard extends StatelessWidget {
   
   /// Zwraca komunikat dla przycisku statusu (ODJAZD!/PRZYJAZD!)
   String get activeStatusLabel => isTerminalStation ? 'PRZYJAZD!' : 'ODJAZD!';
+
+  /// Zwraca etykietę kierunku analogicznie dla M1 i M2
+  String get directionLabel {
+    if (point.stationId.startsWith('C')) {
+      return direction == Direction.mlociny ? '→ Bemowo' : '→ Bródno';
+    }
+    return direction == Direction.mlociny ? '→ Młociny' : '→ Kabaty';
+  }
 
   // Pobierz najwcześniejszy czas z formatu "05:29/05:21/05:11/05:00" -> "05:00"
   String _getEarliestTime(String? timeString) {
@@ -114,13 +131,17 @@ class RoutePointCard extends StatelessWidget {
                             fontSize: 15,
                             color: isPassed ? Colors.grey : Colors.black,
                           ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                         Text(
-                          '$departureLabel: $scheduledTime',
+                          '$directionLabel • $departureLabel: $scheduledTime',
                           style: TextStyle(
                             fontSize: 13,
                             color: isPassed ? Colors.grey : Colors.black54,
                           ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ],
                     ),
@@ -215,10 +236,14 @@ class RoutePointCard extends StatelessWidget {
                           fontWeight: isActiveStatus ? FontWeight.bold : FontWeight.w500,
                           fontSize: status == TimeWindowStatus.active ? 17 : 15,
                         ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                       Text(
-                        '$departureLabel: $scheduledTime',
+                        '$directionLabel • $departureLabel: $scheduledTime',
                         style: const TextStyle(fontSize: 13),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ],
                   ),

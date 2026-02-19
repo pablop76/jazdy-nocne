@@ -30,3 +30,14 @@ Najczęściej wybieraj plik `Jazdy_nocne_V2_4.apk` – pasuje do większości ws
 6. Zbuduj i zainstaluj aplikację na iPhone/iPad: `flutter build ios` lub bezpośrednio z Xcode.
 
 Aplikacja przeznaczona wyłącznie do użytku prywatnego. Nie używaj podczas prowadzenia pociągu!
+
+## Aktualizacje (M1 + M2)
+
+- Dodano obsługę dwóch linii metra: `M1` i `M2`.
+- Dodano przełącznik linii w UI oraz dynamiczny wybór kierunku i obiegu zależnie od wybranej linii.
+- Dla `M2` dodano rozkład z osobnymi kierunkami `Bemowo`/`Bródno` oraz logikę: godziny wspólne dla piątku i soboty, zmienne przypisanie obiegów.
+- Uzupełniono pełne nazwy stacji `M2` (np. `C11 - Świętokrzyska`) w danych.
+- Poprawiono widok aktywnej stacji pod zegarem:
+	- osobna etykieta `Kierunek` z aktualnym `Obiegiem`,
+	- poprawiona czytelność kolorystyczna,
+	- poprawki układu, aby uniknąć overflow na małych ekranach.
