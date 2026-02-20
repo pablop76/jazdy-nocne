@@ -21,11 +21,15 @@ Pliki instalacyjne APK nie są przechowywane w repozytorium. Możesz pobrać je 
 
 Najczęściej wybieraj plik `Jazdy_nocne_V2_4.apk` – pasuje do większości współczesnych smartfonów.
 
+**Struktura katalogów po klonowaniu**
+
+- Repozytorium tworzy katalog `jazdy-nocne` (domyślna nazwa repo z GitHuba).
+- Plik `pubspec.yaml` i folder `lib/` znajdują się bezpośrednio w tym katalogu – **nie ma dodatkowego podkatalogu** typu `flutter_application_1`.
+- Jeśli podczas klonowania nadasz inną nazwę, po prostu pracuj w folderze, który zawiera `pubspec.yaml` (np. `cd moja_nazwa`).
+
 **Instrukcja dla użytkowników Maca (kompilacja na iOS):**
 1. Sklonuj repozytorium na Macu: `git clone https://github.com/pablop76/jazdy-nocne.git`
-2. Otwórz katalog projektu w terminalu:
-	- jeżeli używasz domyślnej nazwy: `cd jazdy-nocne/flutter_application_1`
-	- jeżeli katalog został nazwany inaczej, wejdź do folderu, w którym znajduje się ten projekt Flutter (z plikiem `pubspec.yaml`), np. `cd NAZWA_TWOJEGO_KATALOGU/flutter_application_1`
+2. Wejdź do katalogu projektu: `cd jazdy-nocne` (lub `cd <twoja_nazwa_folderu>` jeśli użyłeś innej nazwy).
 3. Zainstaluj zależności: `flutter pub get`
 4. Otwórz projekt w Xcode: `open ios/Runner.xcworkspace`
 5. Skonfiguruj podpisywanie aplikacji (Apple Developer Account).
