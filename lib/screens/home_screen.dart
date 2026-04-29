@@ -143,12 +143,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final key = '${primaryPoint.stationId}_$scheduledTime';
     if (secondsTo > 0 && secondsTo <= _alertThresholdSeconds && _lastAlertKey != key) {
       _lastAlertKey = key;
+      final stationName = primaryPoint.name.contains(' - ')
+          ? primaryPoint.name.split(' - ').last
+          : primaryPoint.name;
+      final ttsText = 'Za $secondsTo sekund odjazd ze stacji $stationName';
       setState(() {
         _showAlertBanner = true;
-        _alertMessage = 'Za ${secondsTo}s odjazd z ${primaryPoint.name}';
+        _alertMessage = 'Za ${secondsTo}s odjazd ze stacji $stationName';
       });
       _tts.stop();
-      _tts.speak(_alertMessage);
+      _tts.speak(ttsText);
       _alertDismissTimer?.cancel();
       _alertDismissTimer = Timer(const Duration(seconds: 8), () {
         if (mounted) setState(() => _showAlertBanner = false);
