@@ -141,6 +141,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         _showAlertBanner = true;
         _alertMessage = 'Za ${secondsTo}s odjazd z ${primaryPoint.name}';
       });
+      _audioPlayer.stop();
       _audioPlayer.play(AssetSource('audio/welcome.mp3'));
       _alertDismissTimer?.cancel();
       _alertDismissTimer = Timer(const Duration(seconds: 8), () {
@@ -420,6 +421,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                     setState(() {
                                       _currentTime = _currentTime.add(const Duration(seconds: 1));
                                     });
+                                    _checkAndTriggerAlert();
                                   }
                                 });
                                 FocusScope.of(context).unfocus();
@@ -458,9 +460,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         _timer.cancel();
                       } else {
                         _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-                          setState(() {
-                            _currentTime = _currentTime.add(const Duration(seconds: 1));
-                          });
+                          if (mounted) {
+                            setState(() {
+                              _currentTime = _currentTime.add(const Duration(seconds: 1));
+                            });
+                            _checkAndTriggerAlert();
+                          }
                         });
                       }
                     });
@@ -832,6 +837,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       const Icon(Icons.notifications_active, size: 20, color: Colors.red),
                       const SizedBox(width: 8),
@@ -839,35 +845,32 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         'Alert odjazdu',
                         style: TextStyle(fontSize: 14, color: Colors.red),
                       ),
-                      const Spacer(),
                       Switch(
                         value: _alertEnabled,
                         activeThumbColor: Colors.red,
                         onChanged: (value) => setState(() => _alertEnabled = value),
                       ),
+                      if (_alertEnabled)
+                        Text(
+                          '${_alertThresholdSeconds}s',
+                          style: const TextStyle(
+                            fontSize: 13,
+                            color: Colors.red,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                     ],
                   ),
                   if (_alertEnabled)
-                    Row(
-                      children: [
-                        const SizedBox(width: 28),
-                        Text(
-                          '${_alertThresholdSeconds}s przed odjazdem',
-                          style: const TextStyle(fontSize: 12, color: Colors.red),
-                        ),
-                        Expanded(
-                          child: Slider(
-                            value: _alertThresholdSeconds.toDouble(),
-                            min: 10,
-                            max: 120,
-                            divisions: 22,
-                            activeColor: Colors.red,
-                            label: '${_alertThresholdSeconds}s',
-                            onChanged: (value) =>
-                                setState(() => _alertThresholdSeconds = value.round()),
-                          ),
-                        ),
-                      ],
+                    Slider(
+                      value: _alertThresholdSeconds.toDouble(),
+                      min: 10,
+                      max: 120,
+                      divisions: 22,
+                      activeColor: Colors.red,
+                      label: '${_alertThresholdSeconds}s',
+                      onChanged: (value) =>
+                          setState(() => _alertThresholdSeconds = value.round()),
                     ),
                 ],
               ),
