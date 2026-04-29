@@ -37,6 +37,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   bool _disclaimerAccepted = false; // Czy użytkownik zaakceptował ostrzeżenie
   double _screenDimming = 0.0; // Przyciemnienie ekranu (0.0 - 0.8)
   bool _keepScreenOn = true; // Czy ekran ma być zawsze włączony
+  int _alertThresholdSeconds = 30;
+  bool _alertEnabled = true;
+  bool _showAlertBanner = false;
+  String _alertMessage = '';
+  String? _lastAlertKey;
+  Timer? _alertDismissTimer;
 
   @override
   void initState() {
@@ -52,6 +58,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         setState(() {
           _currentTime = _currentTime.add(const Duration(seconds: 1));
         });
+        _checkAndTriggerAlert();
       }
     });
   }
@@ -63,6 +70,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _hourController.dispose();
     _minuteController.dispose();
     WakelockPlus.disable(); // Wyłącz utrzymywanie ekranu
+    _alertDismissTimer?.cancel();
+    _audioPlayer.dispose();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -85,6 +94,58 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeInOut,
       );
+    }
+  }
+
+  RoutePoint? _computePrimaryActivePoint(List<RoutePoint> routePoints) {
+    if (!_isNightServiceTime()) return null;
+    final activePoints = routePoints.where((point) {
+      final status = point.getTimeWindowStatus(_currentTime, _selectedCircuit);
+      return status == TimeWindowStatus.active ||
+             status == TimeWindowStatus.activeApproaching ||
+             status == TimeWindowStatus.activeSecondary;
+    }).toList();
+    if (activePoints.isEmpty) return null;
+    RoutePoint? primary;
+    int minDiff = 999999;
+    for (final point in activePoints) {
+      final scheduledTime = point.getNearestScheduledTime(_currentTime, _selectedCircuit);
+      if (scheduledTime != null) {
+        final parts = scheduledTime.split(':');
+        final hour = int.parse(parts[0]);
+        final minute = int.parse(parts[1]);
+        final scheduled = DateTime(_currentTime.year, _currentTime.month, _currentTime.day, hour, minute);
+        final diff = (_currentTime.difference(scheduled).inSeconds).abs();
+        if (diff < minDiff) {
+          minDiff = diff;
+          primary = point;
+        }
+      }
+    }
+    return primary;
+  }
+
+  void _checkAndTriggerAlert() {
+    if (!_alertEnabled || !_disclaimerAccepted) return;
+    final routePoints = _metroLine == MetroLine.m1
+        ? RouteData.getRoute(_direction, _dayType)
+        : RouteDataM2.getRoute(_direction, _dayType);
+    final primaryPoint = _computePrimaryActivePoint(routePoints);
+    if (primaryPoint == null) return;
+    final secondsTo = primaryPoint.secondsToScheduled(_currentTime, _selectedCircuit);
+    final scheduledTime = primaryPoint.getNearestScheduledTime(_currentTime, _selectedCircuit) ?? '';
+    final key = '${primaryPoint.stationId}_$scheduledTime';
+    if (secondsTo > 0 && secondsTo <= _alertThresholdSeconds && _lastAlertKey != key) {
+      _lastAlertKey = key;
+      setState(() {
+        _showAlertBanner = true;
+        _alertMessage = 'Za ${secondsTo}s odjazd z ${primaryPoint.name}';
+      });
+      _audioPlayer.play(AssetSource('audio/welcome.mp3'));
+      _alertDismissTimer?.cancel();
+      _alertDismissTimer = Timer(const Duration(seconds: 8), () {
+        if (mounted) setState(() => _showAlertBanner = false);
+      });
     }
   }
 
@@ -206,37 +267,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       : RouteDataM2.getRoute(_direction, _dayType);
 
     _normalizeSelectedCircuit();
-    
-    // Sprawdź czy jesteśmy w godzinach nocnych
+
     final isNightTime = _isNightServiceTime();
-    
-    // Znajdź wszystkie aktywne punkty (w oknie czasowym)
-    final activePoints = isNightTime ? routePoints.where((point) {
-      final status = point.getTimeWindowStatus(_currentTime, _selectedCircuit);
-      return status == TimeWindowStatus.active || 
-             status == TimeWindowStatus.activeApproaching || 
-             status == TimeWindowStatus.activeSecondary;
-    }).toList() : <RoutePoint>[];
-    
-    // Znajdź główny aktywny punkt (najbliższy rozkładowemu czasowi - czyli ten z najmniejszą bezwzględną różnicą)
-    RoutePoint? primaryActivePoint;
-    if (activePoints.isNotEmpty) {
-      int minDiff = 999999;
-      for (final point in activePoints) {
-        final scheduledTime = point.getNearestScheduledTime(_currentTime, _selectedCircuit);
-        if (scheduledTime != null) {
-          final parts = scheduledTime.split(':');
-          final hour = int.parse(parts[0]);
-          final minute = int.parse(parts[1]);
-          final scheduled = DateTime(_currentTime.year, _currentTime.month, _currentTime.day, hour, minute);
-          final diff = (_currentTime.difference(scheduled).inSeconds).abs();
-          if (diff < minDiff) {
-            minDiff = diff;
-            primaryActivePoint = point;
-          }
-        }
-      }
-    }
+    final primaryActivePoint = _computePrimaryActivePoint(routePoints);
 
     return Stack(
       children: [
@@ -249,6 +282,36 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             ),
             body: Column(
         children: [
+          // Banner alertu zbliżającego się odjazdu
+          if (_showAlertBanner)
+            Container(
+              width: double.infinity,
+              color: Colors.red.shade800,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: Row(
+                children: [
+                  const Icon(Icons.notifications_active, color: Colors.white, size: 28),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      _alertMessage,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: () {
+                      _alertDismissTimer?.cancel();
+                      setState(() => _showAlertBanner = false);
+                    },
+                    child: const Icon(Icons.close, color: Colors.white, size: 24),
+                  ),
+                ],
+              ),
+            ),
           // Wybór linii metra
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -759,6 +822,56 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 ],
               ),
             ),
+          // Alert zbliżającego się odjazdu
+          if (_settingsExpanded)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 16),
+              color: Colors.red.shade50,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.notifications_active, size: 20, color: Colors.red),
+                      const SizedBox(width: 8),
+                      const Text(
+                        'Alert odjazdu',
+                        style: TextStyle(fontSize: 14, color: Colors.red),
+                      ),
+                      const Spacer(),
+                      Switch(
+                        value: _alertEnabled,
+                        activeThumbColor: Colors.red,
+                        onChanged: (value) => setState(() => _alertEnabled = value),
+                      ),
+                    ],
+                  ),
+                  if (_alertEnabled)
+                    Row(
+                      children: [
+                        const SizedBox(width: 28),
+                        Text(
+                          '${_alertThresholdSeconds}s przed odjazdem',
+                          style: const TextStyle(fontSize: 12, color: Colors.red),
+                        ),
+                        Expanded(
+                          child: Slider(
+                            value: _alertThresholdSeconds.toDouble(),
+                            min: 10,
+                            max: 120,
+                            divisions: 22,
+                            activeColor: Colors.red,
+                            label: '${_alertThresholdSeconds}s',
+                            onChanged: (value) =>
+                                setState(() => _alertThresholdSeconds = value.round()),
+                          ),
+                        ),
+                      ],
+                    ),
+                ],
+              ),
+            ),
           // Lista punktów lub komunikat o braku kursów
           Expanded(
             child: isNightTime 
@@ -767,7 +880,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     // Znajdź indeks aktywnej stacji
                     int activeIndex = -1;
                     if (primaryActivePoint != null) {
-                      activeIndex = routePoints.indexWhere((p) => p.stationId == primaryActivePoint!.stationId);
+                      activeIndex = routePoints.indexWhere((p) => p.stationId == primaryActivePoint.stationId);
                     }
                     
                     // Przewiń do aktywnej stacji przy pierwszym uruchomieniu lub zmianie stacji
