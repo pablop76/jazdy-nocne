@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:audioplayers/audioplayers.dart';
+import 'package:flutter_tts/flutter_tts.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import '../data/route_data.dart';
 import '../data/route_data_m2.dart';
@@ -23,6 +24,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   final TextEditingController _hourController = TextEditingController();
   final TextEditingController _minuteController = TextEditingController();
   final AudioPlayer _audioPlayer = AudioPlayer(); // Player do dźwięku powitalnego
+  final FlutterTts _tts = FlutterTts();
   // Aktualny czas (rzeczywisty)
   DateTime _currentTime = DateTime.now();
   MetroLine _metroLine = MetroLine.m1;
@@ -50,6 +52,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     // Włącz utrzymywanie ekranu (domyślnie)
     WakelockPlus.enable();
+    _tts.setLanguage('pl-PL');
+    _tts.setSpeechRate(0.45);
+    _tts.setVolume(1.0);
     _hourController.text = _currentTime.hour.toString().padLeft(2, '0');
     _minuteController.text = _currentTime.minute.toString().padLeft(2, '0');
     // Aktualizuj czas co sekundę
@@ -71,6 +76,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _minuteController.dispose();
     WakelockPlus.disable(); // Wyłącz utrzymywanie ekranu
     _alertDismissTimer?.cancel();
+    _tts.stop();
     _audioPlayer.dispose();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
@@ -141,8 +147,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         _showAlertBanner = true;
         _alertMessage = 'Za ${secondsTo}s odjazd z ${primaryPoint.name}';
       });
-      _audioPlayer.stop();
-      _audioPlayer.play(AssetSource('audio/welcome.mp3'));
+      _tts.stop();
+      _tts.speak(_alertMessage);
       _alertDismissTimer?.cancel();
       _alertDismissTimer = Timer(const Duration(seconds: 8), () {
         if (mounted) setState(() => _showAlertBanner = false);
