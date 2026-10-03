@@ -9,7 +9,9 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 import '../data/route_data.dart';
 import '../data/route_data_m2.dart';
 import '../models/route_point.dart';
+import '../services/update_service.dart';
 import '../widgets/route_point_card.dart';
+import '../widgets/update_dialog.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -68,6 +70,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _hourController.text = _currentTime.hour.toString().padLeft(2, '0');
     _minuteController.text = _currentTime.minute.toString().padLeft(2, '0');
     _restoreSelection();
+    _checkForUpdate();
     // Aktualizuj czas co sekundę
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (mounted) {
@@ -121,6 +124,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     await prefs.setString(_prefDayType, _dayType.name);
     await prefs.setString(_prefDirection, _direction.name);
     await prefs.setInt(_prefCircuit, _selectedCircuit);
+  }
+
+  // Sprawdź, czy jest nowsza wersja aplikacji, i zaproponuj aktualizację
+  Future<void> _checkForUpdate() async {
+    final update = await UpdateService.checkForUpdate();
+    if (update == null || !mounted) return;
+    showDialog<void>(
+      context: context,
+      builder: (context) => UpdateDialog(update: update),
+    );
   }
 
   void _scrollToActiveStation(int index) {
