@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/route_point.dart';
+import '../theme/app_colors.dart';
 
 class RoutePointCard extends StatelessWidget {
   final RoutePoint point;
@@ -40,7 +41,7 @@ class RoutePointCard extends StatelessWidget {
 
   /// Zwraca odpowiedni komunikat (Odjazd/Przyjazd)
   String get departureLabel => isTerminalStation ? 'Przyjazd' : 'Odjazd';
-  
+
   /// Zwraca komunikat dla przycisku statusu (ODJAZD!/PRZYJAZD!)
   String get activeStatusLabel => isTerminalStation ? 'PRZYJAZD!' : 'ODJAZD!';
 
@@ -62,16 +63,17 @@ class RoutePointCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     var status = point.getTimeWindowStatus(currentTime, circuit);
-    
+
     // Jeśli jest aktywny, sprawdź czy to główna stacja
     if (status == TimeWindowStatus.active && primaryActiveStationId != null) {
       if (point.stationId != primaryActiveStationId) {
         status = TimeWindowStatus.activeSecondary;
       }
     }
-    
+
     final secondsTo = point.secondsToScheduled(currentTime, circuit);
-    final scheduledTime = point.getNearestScheduledTime(currentTime, circuit) ?? '--:--';
+    final scheduledTime =
+        point.getNearestScheduledTime(currentTime, circuit) ?? '--:--';
 
     // Jeśli okno czasowe wyłączone, pokazuj godzinę i czas do odjazdu
     if (!showTimeWindow) {
@@ -91,31 +93,76 @@ class RoutePointCard extends StatelessWidget {
           minute,
         );
         secondsToScheduled = scheduled.difference(currentTime).inSeconds;
-        isPassed =
-            secondsToScheduled < -179; // Uznajemy za miniony po 2:59
+        isPassed = secondsToScheduled < -179; // Uznajemy za miniony po 2:59
       }
 
-      return Card(
-        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-        color: isPassed ? Colors.grey.shade100 : Colors.white,
-        elevation: 2,
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Górny wiersz: numer stacji + nazwa + countdown
-              Row(
+      return _buildCard(
+        accent: isPassed ? AppColors.textMuted : AppColors.primary,
+        background: AppColors.surface,
+        dimmed: isPassed,
+        emphasized: false,
+        scheduledTime: scheduledTime,
+        trailing: _buildSimpleCountdown(secondsToScheduled, isPassed),
+      );
+    }
+
+    final isActiveStatus =
+        status == TimeWindowStatus.active ||
+        status == TimeWindowStatus.activeApproaching ||
+        status == TimeWindowStatus.activeSecondary;
+
+    return _buildCard(
+      accent: _getStatusColor(status),
+      background: _getBackgroundColor(status),
+      dimmed: false,
+      emphasized: isActiveStatus,
+      scheduledTime: scheduledTime,
+      trailing: _buildStatusWidget(status, secondsTo),
+    );
+  }
+
+  /// Karta stacji: kolorowy pasek statusu, numer, nazwa, godziny i status
+  Widget _buildCard({
+    required Color accent,
+    required Color background,
+    required bool dimmed,
+    required bool emphasized,
+    required String scheduledTime,
+    required Widget trailing,
+  }) {
+    final nameColor = dimmed ? AppColors.textMuted : AppColors.textPrimary;
+    final detailColor = dimmed ? AppColors.textMuted : AppColors.textSecondary;
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: emphasized ? accent.withValues(alpha: 0.6) : AppColors.border,
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Kolorowy pasek statusu przy lewej krawędzi
+          Container(width: 4, color: accent),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(10, 8, 12, 8),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   CircleAvatar(
-                    radius: 20,
-                    backgroundColor: isPassed ? Colors.grey : Colors.blue,
+                    radius: 21,
+                    backgroundColor: accent,
                     child: Text(
                       point.stationId,
                       style: const TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.bold,
-                        fontSize: 12,
+                        fontSize: 13,
                       ),
                     ),
                   ),
@@ -127,258 +174,165 @@ class RoutePointCard extends StatelessWidget {
                         Text(
                           point.name,
                           style: TextStyle(
-                            fontWeight: FontWeight.w500,
+                            fontWeight: emphasized
+                                ? FontWeight.bold
+                                : FontWeight.w600,
                             fontSize: 15,
-                            color: isPassed ? Colors.grey : Colors.black,
+                            color: nameColor,
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
                         Text(
                           '$directionLabel • $departureLabel: $scheduledTime',
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: isPassed ? Colors.grey : Colors.black54,
-                          ),
+                          style: TextStyle(fontSize: 13, color: detailColor),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
-                      ],
-                    ),
-                  ),
-                  _buildSimpleCountdown(secondsToScheduled, isPassed),
-                ],
-              ),
-              // Dolny wiersz: pierwszy i ostatni odjazd
-              if (point.firstDepartureMonThu != null || point.lastDepartureMonThu != null)
-                Row(
-                  children: [
-                    const SizedBox(width: 52),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
+                        // Pierwszy i ostatni odjazd
+                        if (point.firstDepartureMonThu != null ||
+                            point.lastDepartureMonThu != null) ...[
                           if (point.firstDepartureMonThu != null)
-                            Text(
+                            _buildDepartureLine(
                               'Pierwszy: ${_getEarliestTime(point.firstDepartureMonThu)}',
-                              style: TextStyle(
-                                fontSize: 10,
-                                color: isPassed ? Colors.grey.shade400 : Colors.green.shade700,
-                              ),
-                              softWrap: true,
+                              dimmed
+                                  ? AppColors.textMuted
+                                  : AppColors.successBright,
                             ),
                           if (point.firstDepartureFriSat != null &&
-                              _getEarliestTime(point.firstDepartureFriSat) != _getEarliestTime(point.firstDepartureMonThu))
-                            Text(
+                              _getEarliestTime(point.firstDepartureFriSat) !=
+                                  _getEarliestTime(point.firstDepartureMonThu))
+                            _buildDepartureLine(
                               'Pierwszy (pt-sb): ${_getEarliestTime(point.firstDepartureFriSat)}',
-                              style: TextStyle(
-                                fontSize: 10,
-                                color: isPassed ? Colors.grey.shade400 : Colors.green.shade600,
-                              ),
-                              softWrap: true,
+                              dimmed
+                                  ? AppColors.textMuted
+                                  : AppColors.successBright,
                             ),
-                          if (point.lastDepartureMonThu != null || point.lastDepartureFriSat != null)
-                            Text(
+                          if (point.lastDepartureMonThu != null ||
+                              point.lastDepartureFriSat != null)
+                            _buildDepartureLine(
                               'Ostatni: ${point.lastDepartureMonThu ?? "--:--"} / ${point.lastDepartureFriSat ?? "--:--"} (pt-sb)',
-                              style: TextStyle(
-                                fontSize: 10,
-                                color: isPassed ? Colors.grey.shade400 : Colors.red.shade700,
-                              ),
-                              softWrap: true,
+                              dimmed ? AppColors.textMuted : AppColors.danger,
                             ),
                         ],
-                      ),
-                    ),
-                  ],
-                ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    final isActiveStatus = status == TimeWindowStatus.active || 
-        status == TimeWindowStatus.activeApproaching || 
-        status == TimeWindowStatus.activeSecondary;
-    
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-      color: _getBackgroundColor(status),
-      elevation: isActiveStatus ? 8 : 2,
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Górny wiersz: numer stacji + nazwa + status
-            Row(
-              children: [
-                CircleAvatar(
-                  radius: 20,
-                  backgroundColor: _getStatusColor(status),
-                  child: Text(
-                    point.stationId,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 12,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        point.name,
-                        style: TextStyle(
-                          fontWeight: isActiveStatus ? FontWeight.bold : FontWeight.w500,
-                          fontSize: status == TimeWindowStatus.active ? 17 : 15,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      Text(
-                        '$directionLabel • $departureLabel: $scheduledTime',
-                        style: const TextStyle(fontSize: 13),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ),
-                ),
-                _buildStatusWidget(status, secondsTo),
-              ],
-            ),
-            // Dolny wiersz: pierwszy i ostatni odjazd
-            if (point.firstDepartureMonThu != null || point.lastDepartureMonThu != null)
-              Row(
-                children: [
-                  const SizedBox(width: 52),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        if (point.firstDepartureMonThu != null)
-                          Text(
-                            'Pierwszy: ${_getEarliestTime(point.firstDepartureMonThu)}',
-                            style: TextStyle(fontSize: 10, color: Colors.green.shade700),
-                            softWrap: true,
-                          ),
-                        if (point.firstDepartureFriSat != null &&
-                            _getEarliestTime(point.firstDepartureFriSat) != _getEarliestTime(point.firstDepartureMonThu))
-                          Text(
-                            'Pierwszy (pt-sb): ${_getEarliestTime(point.firstDepartureFriSat)}',
-                            style: TextStyle(fontSize: 10, color: Colors.green.shade600),
-                            softWrap: true,
-                          ),
-                        if (point.lastDepartureMonThu != null || point.lastDepartureFriSat != null)
-                          Text(
-                            'Ostatni: ${point.lastDepartureMonThu ?? "--:--"} / ${point.lastDepartureFriSat ?? "--:--"} (pt-sb)',
-                            style: TextStyle(fontSize: 10, color: Colors.red.shade700),
-                            softWrap: true,
-                          ),
                       ],
                     ),
                   ),
+                  const SizedBox(width: 8),
+                  trailing,
                 ],
               ),
-          ],
-        ),
+            ),
+          ),
+        ],
       ),
+    );
+  }
+
+  Widget _buildDepartureLine(String text, Color color) {
+    return Text(
+      text,
+      style: TextStyle(fontSize: 10.5, color: color),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
     );
   }
 
   Color _getBackgroundColor(TimeWindowStatus status) {
     switch (status) {
       case TimeWindowStatus.active:
-        return Colors.green.shade50;
+        return AppColors.successSurface;
       case TimeWindowStatus.activeApproaching:
-        return Colors.orange.shade50;
+        return AppColors.warningSurface;
       case TimeWindowStatus.activeSecondary:
-        return Colors.orange.shade50;
+        return AppColors.warningSurface;
       case TimeWindowStatus.passed:
-        return Colors.red.shade50;
+        return AppColors.dangerSurface;
       case TimeWindowStatus.upcoming:
-        return Colors.white;
+        return AppColors.surface;
     }
   }
 
   Color _getStatusColor(TimeWindowStatus status) {
     switch (status) {
       case TimeWindowStatus.active:
-        return Colors.green;
+        return AppColors.success;
       case TimeWindowStatus.activeApproaching:
-        return Colors.orange;
+        return AppColors.warning;
       case TimeWindowStatus.activeSecondary:
-        return Colors.orange;
+        return AppColors.warning;
       case TimeWindowStatus.passed:
-        return Colors.red.shade400;
+        return AppColors.danger;
       case TimeWindowStatus.upcoming:
-        return Colors.blue;
+        return AppColors.primary;
     }
   }
 
   Widget _buildStatusWidget(TimeWindowStatus status, int secondsTo) {
     switch (status) {
       case TimeWindowStatus.active:
-        return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          decoration: BoxDecoration(
-            color: Colors.green,
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: Text(
-            activeStatusLabel,
-            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-          ),
+        return _buildStatusPill(
+          activeStatusLabel,
+          background: AppColors.success,
+          foreground: Colors.white,
         );
       case TimeWindowStatus.activeApproaching:
-        return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          decoration: BoxDecoration(
-            color: Colors.orange,
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: const Text(
-            'ZBLIŻA SIĘ',
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-          ),
+        return _buildStatusPill(
+          'ZBLIŻA SIĘ',
+          background: AppColors.warning,
+          foreground: Colors.black,
         );
       case TimeWindowStatus.activeSecondary:
-        return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          decoration: BoxDecoration(
-            color: Colors.orange,
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: const Text(
-            'W OKNIE',
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-          ),
+        return _buildStatusPill(
+          'W OKNIE',
+          background: AppColors.warning,
+          foreground: Colors.black,
         );
       case TimeWindowStatus.passed:
-        return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          decoration: BoxDecoration(
-            color: Colors.red.shade400,
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: const Text(
-            'CZAS MINĄŁ',
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-          ),
+        return _buildStatusPill(
+          'CZAS MINĄŁ',
+          background: AppColors.danger,
+          foreground: Colors.white,
         );
       case TimeWindowStatus.upcoming:
-        return Text(
-          _formatTimeRemaining(secondsTo),
-          style: const TextStyle(
-            color: Colors.blue,
-            fontWeight: FontWeight.w500,
-          ),
-        );
+        return _buildTimeRemaining(secondsTo);
     }
+  }
+
+  Widget _buildStatusPill(
+    String label, {
+    required Color background,
+    required Color foreground,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(color: foreground, fontWeight: FontWeight.bold),
+      ),
+    );
+  }
+
+  Widget _buildTimeRemaining(int seconds) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const Icon(Icons.access_time, size: 16, color: AppColors.primary),
+        const SizedBox(width: 4),
+        Text(
+          _formatTimeRemaining(seconds),
+          style: const TextStyle(
+            color: AppColors.primary,
+            fontWeight: FontWeight.w600,
+            fontSize: 14,
+          ),
+        ),
+      ],
+    );
   }
 
   String _formatTimeRemaining(int seconds) {
@@ -401,42 +355,23 @@ class RoutePointCard extends StatelessWidget {
 
   Widget _buildSimpleCountdown(int secondsToScheduled, bool isPassed) {
     if (isPassed) {
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration: BoxDecoration(
-          color: Colors.grey.shade300,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: const Text(
-          'MINĘŁO',
-          style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold),
-        ),
+      return _buildStatusPill(
+        'MINĘŁO',
+        background: AppColors.surfaceHigh,
+        foreground: AppColors.textMuted,
       );
     }
 
     if (secondsToScheduled <= 0 && secondsToScheduled > -179) {
       // Odjazd/Przyjazd teraz (w ciągu ostatnich 2:59)
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration: BoxDecoration(
-          color: Colors.green,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Text(
-          activeStatusLabel,
-          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-        ),
+      return _buildStatusPill(
+        activeStatusLabel,
+        background: AppColors.success,
+        foreground: Colors.white,
       );
     }
 
     // Przed odjazdem - pokaż odliczanie
-    return Text(
-      _formatTimeRemaining(secondsToScheduled),
-      style: const TextStyle(
-        color: Colors.blue,
-        fontWeight: FontWeight.w500,
-        fontSize: 14,
-      ),
-    );
+    return _buildTimeRemaining(secondsToScheduled);
   }
 }

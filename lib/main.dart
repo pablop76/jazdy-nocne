@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'screens/home_screen.dart';
+import 'theme/app_colors.dart';
 
 void main() {
   runApp(const MyApp());
@@ -14,8 +15,38 @@ class MyApp extends StatelessWidget {
       title: 'Jazdy nocne',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
         useMaterial3: true,
+        brightness: Brightness.dark,
+        colorScheme:
+            ColorScheme.fromSeed(
+              seedColor: AppColors.primary,
+              brightness: Brightness.dark,
+            ).copyWith(
+              primary: AppColors.primary,
+              onPrimary: Colors.white,
+              surface: AppColors.surface,
+            ),
+        scaffoldBackgroundColor: AppColors.background,
+        segmentedButtonTheme: SegmentedButtonThemeData(
+          style: ButtonStyle(
+            backgroundColor: WidgetStateProperty.resolveWith(
+              (states) => states.contains(WidgetState.selected)
+                  ? AppColors.primary
+                  : AppColors.surfaceHigh,
+            ),
+            foregroundColor: const WidgetStatePropertyAll(Colors.white),
+            side: const WidgetStatePropertyAll(
+              BorderSide(color: AppColors.border),
+            ),
+          ),
+        ),
+        chipTheme: const ChipThemeData(
+          backgroundColor: AppColors.surfaceHigh,
+          selectedColor: AppColors.primary,
+          side: BorderSide(color: AppColors.border),
+          labelStyle: TextStyle(color: Colors.white),
+          checkmarkColor: Colors.white,
+        ),
       ),
       home: const HomeScreen(),
     );

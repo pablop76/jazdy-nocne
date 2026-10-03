@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
@@ -10,6 +11,7 @@ import '../data/route_data.dart';
 import '../data/route_data_m2.dart';
 import '../models/route_point.dart';
 import '../services/update_service.dart';
+import '../theme/app_colors.dart';
 import '../widgets/route_point_card.dart';
 import '../widgets/update_dialog.dart';
 
@@ -256,20 +258,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   // Krótki opis zapamiętanego wyboru, np. „Sobota · kierunek Młociny · obieg 4”
   String _selectionSummary() {
     final day = _dayType == DayType.friday ? 'Piątek' : 'Sobota';
-    final String direction;
-    if (_metroLine == MetroLine.m1) {
-      direction = _direction == Direction.mlociny ? 'Młociny' : 'Kabaty';
-    } else {
-      direction = _direction == Direction.mlociny ? 'Bemowo' : 'Bródno';
-    }
-    return '$day · kierunek $direction · obieg $_selectedCircuit';
+    return '$day · kierunek ${_directionName(_direction)} · obieg $_selectedCircuit';
   }
 
-  String _directionLabelForPoint(RoutePoint point) {
-    if (point.stationId.startsWith('C')) {
-      return _direction == Direction.mlociny ? '→ Bemowo' : '→ Bródno';
+  // Nazwa stacji końcowej kierunku na wybranej linii
+  String _directionName(Direction direction) {
+    if (_metroLine == MetroLine.m1) {
+      return direction == Direction.mlociny ? 'Młociny' : 'Kabaty';
     }
-    return _direction == Direction.mlociny ? '→ Młociny' : '→ Kabaty';
+    return direction == Direction.mlociny ? 'Bemowo' : 'Bródno';
   }
 
   @override
@@ -367,911 +364,963 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final isNightTime = _isNightServiceTime();
     final primaryActivePoint = _computePrimaryActivePoint(routePoints);
 
-    return Stack(
-      children: [
-        Positioned.fill(
-          child: Scaffold(
-            appBar: AppBar(
-              title: Text.rich(
-                TextSpan(
-                  text: 'Metro - Jazdy Nocne',
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      // Jasne ikony paska stanu na ciemnym tle
+      value: SystemUiOverlayStyle.light,
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: Scaffold(
+              backgroundColor: AppColors.background,
+              // Klawiatura przy edycji czasu zasłania listę zamiast ściskać układ
+              resizeToAvoidBottomInset: false,
+              body: SafeArea(
+                child: Column(
                   children: [
-                    if (_appVersion.isNotEmpty)
-                      TextSpan(
-                        text: '  v$_appVersion',
-                        style: const TextStyle(
-                          fontSize: 14,
-                          color: Colors.black54,
-                        ),
-                      ),
+                    _buildHeader(),
+                    if (_showAlertBanner) _buildAlertBanner(),
+                    _buildLineSelector(),
+                    _buildClock(),
+                    _buildActiveStation(primaryActivePoint),
+                    _buildSelectionChips(),
+                    _buildSettingsToggle(),
+                    // Rozwinięte ustawienia zajmują miejsce listy i same się
+                    // przewijają, więc mieszczą się na każdym ekranie
+                    Expanded(
+                      child: _settingsExpanded
+                          ? _buildSettingsPanel()
+                          : isNightTime
+                          ? _buildStationList(routePoints, primaryActivePoint)
+                          : _buildOffHoursMessage(),
+                    ),
                   ],
                 ),
               ),
-              centerTitle: true,
-              backgroundColor: Theme.of(context).colorScheme.primaryContainer,
             ),
-            body: Column(
-              children: [
-                // Banner alertu zbliżającego się odjazdu
-                if (_showAlertBanner)
-                  Container(
-                    width: double.infinity,
-                    color: Colors.red.shade800,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 12,
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(
-                          Icons.notifications_active,
-                          color: Colors.white,
-                          size: 28,
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            _alertMessage,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                        GestureDetector(
-                          onTap: () {
-                            _alertDismissTimer?.cancel();
-                            setState(() => _showAlertBanner = false);
-                          },
-                          child: const Icon(
-                            Icons.close,
-                            color: Colors.white,
-                            size: 24,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                // Wybór linii metra
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 8,
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Text(
-                        'Linia: ',
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(width: 8),
-                      SegmentedButton<MetroLine>(
-                        showSelectedIcon: false,
-                        segments: const [
-                          ButtonSegment(value: MetroLine.m1, label: Text('M1')),
-                          ButtonSegment(value: MetroLine.m2, label: Text('M2')),
-                        ],
-                        selected: {_metroLine},
-                        onSelectionChanged: (newSelection) {
-                          setState(() {
-                            _metroLine = newSelection.first;
-                            _direction = Direction.mlociny;
-                            _normalizeSelectedCircuit();
-                            _initialScrollDone = false;
-                            _lastActiveStationId = null;
-                          });
-                          _saveSelection();
-                        },
-                      ),
-                    ],
+          ),
+          // Overlay przyciemniający ekran (na całej aplikacji)
+          if (_screenDimming > 0)
+            Positioned.fill(
+              child: IgnorePointer(
+                child: Container(
+                  color: Colors.black.withValues(alpha: _screenDimming),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  static const TextStyle _settingLabelStyle = TextStyle(
+    fontSize: 15,
+    color: AppColors.textPrimary,
+    fontWeight: FontWeight.w500,
+  );
+  static const Widget _settingsDivider = Divider(
+    height: 1,
+    color: AppColors.border,
+  );
+
+  // Nagłówek: logo, nazwa z numerem wersji i skrót do ustawień
+  Widget _buildHeader() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(16, 8, 4, 8),
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [AppColors.background, AppColors.headerGlow],
+        ),
+        border: Border(bottom: BorderSide(color: AppColors.border)),
+      ),
+      child: Stack(
+        alignment: Alignment.centerRight,
+        children: [
+          // Zarys pociągu w tle nagłówka
+          const Positioned(
+            right: 48,
+            child: Icon(
+              Icons.directions_subway_filled,
+              size: 60,
+              color: AppColors.headerArt,
+            ),
+          ),
+          Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                alignment: Alignment.center,
+                decoration: const BoxDecoration(
+                  color: AppColors.primary,
+                  shape: BoxShape.circle,
+                ),
+                child: const Text(
+                  'M',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 26,
+                    fontWeight: FontWeight.w900,
+                    fontStyle: FontStyle.italic,
                   ),
                 ),
-                // Nagłówek z aktualnym czasem
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 8,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text(
+                      'Metro',
+                      style: TextStyle(
+                        color: AppColors.textPrimary,
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        height: 1.15,
+                      ),
+                    ),
+                    Text.rich(
+                      TextSpan(
+                        text: 'Jazdy Nocne',
+                        children: [
+                          if (_appVersion.isNotEmpty)
+                            TextSpan(
+                              text: '   v$_appVersion',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: AppColors.textMuted,
+                              ),
+                            ),
+                        ],
+                      ),
+                      style: const TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: 15,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                tooltip: _settingsExpanded
+                    ? 'Zwiń ustawienia'
+                    : 'Rozwiń ustawienia',
+                icon: const Icon(Icons.settings_outlined),
+                color: AppColors.textPrimary,
+                onPressed: _toggleSettings,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Banner alertu zbliżającego się odjazdu
+  Widget _buildAlertBanner() {
+    return Container(
+      width: double.infinity,
+      color: Colors.red.shade800,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Row(
+        children: [
+          const Icon(Icons.notifications_active, color: Colors.white, size: 28),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              _alertMessage,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          GestureDetector(
+            onTap: () {
+              _alertDismissTimer?.cancel();
+              setState(() => _showAlertBanner = false);
+            },
+            child: const Icon(Icons.close, color: Colors.white, size: 24),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Wybór linii metra
+  Widget _buildLineSelector() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Text(
+            'Linia:',
+            style: TextStyle(color: AppColors.textPrimary, fontSize: 16),
+          ),
+          const SizedBox(width: 12),
+          Container(
+            height: 40,
+            decoration: BoxDecoration(
+              color: AppColors.surfaceHigh,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _buildLineSegment(MetroLine.m1, 'M1'),
+                _buildLineSegment(MetroLine.m2, 'M2'),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLineSegment(MetroLine line, String label) {
+    final selected = _metroLine == line;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: selected ? null : () => _setLine(line),
+      child: Container(
+        width: 84,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: selected ? AppColors.primary : Colors.transparent,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: AppColors.textPrimary,
+            fontSize: 16,
+            fontWeight: selected ? FontWeight.bold : FontWeight.w500,
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _setLine(MetroLine line) {
+    setState(() {
+      _metroLine = line;
+      _direction = Direction.mlociny;
+      _normalizeSelectedCircuit();
+      _initialScrollDone = false;
+      _lastActiveStationId = null;
+    });
+    _saveSelection();
+  }
+
+  void _setDirection(Direction direction) {
+    setState(() {
+      _direction = direction;
+      _normalizeSelectedCircuit();
+      _initialScrollDone = false;
+      _lastActiveStationId = null;
+    });
+    _saveSelection();
+  }
+
+  // Zegar; stuknięcie przełącza tryb ręcznego ustawiania czasu
+  Widget _buildClock() {
+    final hour = _currentTime.hour.toString().padLeft(2, '0');
+    final minute = _currentTime.minute.toString().padLeft(2, '0');
+    final second = _currentTime.second.toString().padLeft(2, '0');
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (_manualTimeMode) _buildManualTimeRow(),
+          Stack(
+            alignment: Alignment.center,
+            children: [
+              GestureDetector(
+                onTap: _toggleManualTimeMode,
+                child: Text(
+                  '$hour:$minute:$second',
+                  style: TextStyle(
+                    fontSize: 54,
+                    fontWeight: FontWeight.w800,
+                    height: 1.1,
+                    color: _manualTimeMode
+                        ? AppColors.warning
+                        : AppColors.textPrimary,
+                    fontFeatures: const [FontFeature.tabularFigures()],
                   ),
-                  color: Theme.of(context).colorScheme.primaryContainer,
+                ),
+              ),
+              if (!_manualTimeMode)
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: IconButton(
+                    tooltip: 'Edycja czasu',
+                    icon: const Icon(Icons.edit, size: 18),
+                    color: AppColors.textMuted,
+                    onPressed: () {
+                      setState(() {
+                        _manualTimeMode = true;
+                      });
+                    },
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Pola ręcznego ustawiania czasu
+  Widget _buildManualTimeRow() {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          _buildTimeField(_hourController, 'Godz'),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 8),
+            child: Text(
+              ':',
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: AppColors.textPrimary,
+              ),
+            ),
+          ),
+          _buildTimeField(_minuteController, 'Min'),
+          const SizedBox(width: 16),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.warning,
+              foregroundColor: Colors.black,
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            ),
+            onPressed: _applyManualTime,
+            child: const Text(
+              'USTAW',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTimeField(TextEditingController controller, String label) {
+    return SizedBox(
+      width: 70,
+      height: 50,
+      child: TextField(
+        keyboardType: TextInputType.number,
+        textAlign: TextAlign.center,
+        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+        decoration: InputDecoration(
+          labelText: label,
+          border: const OutlineInputBorder(),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 8,
+            vertical: 8,
+          ),
+        ),
+        controller: controller,
+      ),
+    );
+  }
+
+  void _applyManualTime() {
+    final hour = int.tryParse(_hourController.text);
+    final minute = int.tryParse(_minuteController.text);
+    if (hour == null ||
+        hour < 0 ||
+        hour > 23 ||
+        minute == null ||
+        minute < 0 ||
+        minute > 59) {
+      return;
+    }
+    setState(() {
+      _currentTime = DateTime(
+        _currentTime.year,
+        _currentTime.month,
+        _currentTime.day,
+        hour,
+        minute,
+        0,
+      );
+      _manualTimeMode = false; // zamknij panel edycji
+      _hourController.text = hour.toString().padLeft(2, '0');
+      _minuteController.text = minute.toString().padLeft(2, '0');
+    });
+    _restartClock();
+    FocusScope.of(context).unfocus();
+  }
+
+  void _toggleManualTimeMode() {
+    setState(() {
+      _manualTimeMode = !_manualTimeMode;
+    });
+    if (_manualTimeMode) {
+      _timer.cancel();
+    } else {
+      _restartClock();
+    }
+  }
+
+  // Uruchom od nowa odliczanie sekund
+  void _restartClock() {
+    _timer.cancel();
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (mounted) {
+        setState(() {
+          _currentTime = _currentTime.add(const Duration(seconds: 1));
+        });
+        _checkAndTriggerAlert();
+      }
+    });
+  }
+
+  // Aktywna stacja z godziną odjazdu albo informacja o braku okna
+  Widget _buildActiveStation(RoutePoint? point) {
+    if (point == null) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 8),
+        child: Text(
+          'Brak aktywnego okna',
+          style: TextStyle(fontSize: 16, color: AppColors.textSecondary),
+        ),
+      );
+    }
+    final time =
+        point.getNearestScheduledTime(_currentTime, _selectedCircuit) ??
+        '--:--';
+    return Container(
+      height: 52,
+      margin: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [AppColors.successDark, AppColors.success],
+        ),
+        borderRadius: BorderRadius.circular(26),
+        border: Border.all(color: AppColors.successBright, width: 1.5),
+      ),
+      child: Row(
+        children: [
+          const SizedBox(width: 6),
+          Container(
+            width: 38,
+            height: 38,
+            alignment: Alignment.center,
+            decoration: const BoxDecoration(
+              color: AppColors.background,
+              shape: BoxShape.circle,
+            ),
+            child: const Text('🚇', style: TextStyle(fontSize: 20)),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              point.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          Container(width: 1, color: AppColors.successBright),
+          const SizedBox(width: 12),
+          const Icon(Icons.access_time, color: Colors.white, size: 20),
+          const SizedBox(width: 6),
+          Text(
+            time,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(width: 16),
+        ],
+      ),
+    );
+  }
+
+  // Pigułki z kierunkiem (z szybką zmianą) i obiegiem
+  Widget _buildSelectionChips() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Flexible(
+            child: PopupMenuButton<Direction>(
+              tooltip: 'Zmień kierunek',
+              initialValue: _direction,
+              color: AppColors.surfaceHigh,
+              onSelected: _setDirection,
+              itemBuilder: (context) => [
+                for (final direction in Direction.values)
+                  PopupMenuItem(
+                    value: direction,
+                    child: Text(_directionName(direction)),
+                  ),
+              ],
+              child: _buildChip(
+                'Kierunek:',
+                _directionName(_direction),
+                trailing: Icons.keyboard_arrow_down,
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          _buildChip('Obieg:', '$_selectedCircuit'),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildChip(String label, String value, {IconData? trailing}) {
+    return Container(
+      height: 38,
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceHigh,
+        borderRadius: BorderRadius.circular(19),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              color: AppColors.textSecondary,
+              fontSize: 14,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              value,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: AppColors.textPrimary,
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          if (trailing != null) ...[
+            const SizedBox(width: 6),
+            Icon(trailing, size: 18, color: AppColors.textSecondary),
+          ],
+        ],
+      ),
+    );
+  }
+
+  // Karta zwijania ustawień
+  Widget _buildSettingsToggle() {
+    final expanded = _settingsExpanded;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 6),
+      child: Material(
+        // Po rozwinięciu karta ma wyraźny kolor, żeby „Zwiń ustawienia”
+        // nie ginęło wśród wierszy ustawień
+        color: expanded ? AppColors.primary : AppColors.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+          side: BorderSide(
+            color: expanded ? AppColors.primary : AppColors.border,
+          ),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: _toggleSettings,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.format_list_bulleted,
+                  size: 22,
+                  color: expanded ? Colors.white : AppColors.primary,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
                   child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // Przyciski sterowania zegarem
-                      if (_manualTimeMode)
-                        Column(
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                SizedBox(
-                                  width: 70,
-                                  height: 50,
-                                  child: TextField(
-                                    keyboardType: TextInputType.number,
-                                    textAlign: TextAlign.center,
-                                    style: const TextStyle(
-                                      fontSize: 20,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                    decoration: const InputDecoration(
-                                      labelText: 'Godz',
-                                      border: OutlineInputBorder(),
-                                      contentPadding: EdgeInsets.symmetric(
-                                        horizontal: 8,
-                                        vertical: 8,
-                                      ),
-                                    ),
-                                    controller: _hourController,
-                                  ),
-                                ),
-                                const Padding(
-                                  padding: EdgeInsets.symmetric(horizontal: 8),
-                                  child: Text(
-                                    ':',
-                                    style: TextStyle(
-                                      fontSize: 24,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
-                                SizedBox(
-                                  width: 70,
-                                  height: 50,
-                                  child: TextField(
-                                    keyboardType: TextInputType.number,
-                                    textAlign: TextAlign.center,
-                                    style: const TextStyle(
-                                      fontSize: 20,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                    decoration: const InputDecoration(
-                                      labelText: 'Min',
-                                      border: OutlineInputBorder(),
-                                      contentPadding: EdgeInsets.symmetric(
-                                        horizontal: 8,
-                                        vertical: 8,
-                                      ),
-                                    ),
-                                    controller: _minuteController,
-                                  ),
-                                ),
-                                const SizedBox(width: 16),
-                                ElevatedButton(
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.orange,
-                                    foregroundColor: Colors.white,
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 20,
-                                      vertical: 12,
-                                    ),
-                                  ),
-                                  onPressed: () {
-                                    final hour = int.tryParse(
-                                      _hourController.text,
-                                    );
-                                    final minute = int.tryParse(
-                                      _minuteController.text,
-                                    );
-                                    if (hour != null &&
-                                        hour >= 0 &&
-                                        hour <= 23 &&
-                                        minute != null &&
-                                        minute >= 0 &&
-                                        minute <= 59) {
-                                      setState(() {
-                                        _currentTime = DateTime(
-                                          _currentTime.year,
-                                          _currentTime.month,
-                                          _currentTime.day,
-                                          hour,
-                                          minute,
-                                          0,
-                                        );
-                                        _manualTimeMode =
-                                            false; // zamknij panel edycji
-                                        _hourController.text = hour
-                                            .toString()
-                                            .padLeft(2, '0');
-                                        _minuteController.text = minute
-                                            .toString()
-                                            .padLeft(2, '0');
-                                      });
-                                      _timer.cancel();
-                                      _timer = Timer.periodic(
-                                        const Duration(seconds: 1),
-                                        (timer) {
-                                          if (mounted) {
-                                            setState(() {
-                                              _currentTime = _currentTime.add(
-                                                const Duration(seconds: 1),
-                                              );
-                                            });
-                                            _checkAndTriggerAlert();
-                                          }
-                                        },
-                                      );
-                                      FocusScope.of(context).unfocus();
-                                    }
-                                  },
-                                  child: const Text(
-                                    'USTAW',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      if (!_manualTimeMode)
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: TextButton.icon(
-                            icon: const Icon(
-                              Icons.edit,
-                              size: 18,
-                              color: Colors.grey,
-                            ),
-                            label: const Text(
-                              'Edycja',
-                              style: TextStyle(
-                                color: Colors.grey,
-                                fontSize: 13,
-                              ),
-                            ),
-                            style: TextButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 2,
-                              ),
-                              minimumSize: Size(0, 0),
-                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                              visualDensity: VisualDensity.compact,
-                            ),
-                            onPressed: () {
-                              setState(() {
-                                _manualTimeMode = true;
-                              });
-                            },
-                          ),
-                        ),
-                      GestureDetector(
-                        onTap: () {
-                          setState(() {
-                            _manualTimeMode = !_manualTimeMode;
-                            if (_manualTimeMode) {
-                              _timer.cancel();
-                            } else {
-                              _timer = Timer.periodic(
-                                const Duration(seconds: 1),
-                                (timer) {
-                                  if (mounted) {
-                                    setState(() {
-                                      _currentTime = _currentTime.add(
-                                        const Duration(seconds: 1),
-                                      );
-                                    });
-                                    _checkAndTriggerAlert();
-                                  }
-                                },
-                              );
-                            }
-                          });
-                        },
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(
-                              '${_currentTime.hour.toString().padLeft(2, '0')}:${_currentTime.minute.toString().padLeft(2, '0')}:${_currentTime.second.toString().padLeft(2, '0')}',
-                              style: TextStyle(
-                                fontSize: 48,
-                                fontWeight: FontWeight.bold,
-                                color: _manualTimeMode ? Colors.orange : null,
-                              ),
-                            ),
-                            // ...ikona edycji usunięta...
-                          ],
+                      Text(
+                        expanded ? 'Zwiń ustawienia' : 'Rozwiń ustawienia',
+                        style: TextStyle(
+                          color: AppColors.textPrimary,
+                          fontSize: 15,
+                          fontWeight: expanded
+                              ? FontWeight.bold
+                              : FontWeight.w600,
                         ),
                       ),
-                      const SizedBox(height: 8),
-                      if (primaryActivePoint != null)
-                        Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 16,
-                                    vertical: 8,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: Colors.green,
-                                    borderRadius: BorderRadius.circular(20),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      const Text(
-                                        '🚇',
-                                        style: TextStyle(fontSize: 20),
-                                      ),
-                                      const SizedBox(width: 8),
-                                      Flexible(
-                                        child: Text(
-                                          primaryActivePoint.name,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                    vertical: 8,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: Colors.green.shade700,
-                                    borderRadius: BorderRadius.circular(20),
-                                  ),
-                                  child: Text(
-                                    primaryActivePoint.getNearestScheduledTime(
-                                          _currentTime,
-                                          _selectedCircuit,
-                                        ) ??
-                                        "--:--",
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 4),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 10,
-                                vertical: 4,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Colors.amber.shade100,
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Text(
-                                'Kierunek: ${_directionLabelForPoint(primaryActivePoint)}   Obieg: $_selectedCircuit',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  color: Colors.brown.shade900,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ),
-                          ],
-                        )
-                      else
-                        const Text(
-                          'Brak aktywnego okna',
-                          style: TextStyle(fontSize: 16, color: Colors.grey),
+                      // Zapamiętany wybór widoczny bez rozwijania ustawień
+                      if (!expanded)
+                        Text(
+                          _selectionSummary(),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: AppColors.textSecondary,
+                            fontSize: 13,
+                          ),
                         ),
                     ],
                   ),
                 ),
-                // Przycisk zwijania ustawień
-                InkWell(
-                  onTap: () {
-                    setState(() {
-                      _settingsExpanded = !_settingsExpanded;
-                    });
-                  },
-                  child: Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(
-                      vertical: 8,
-                      horizontal: 16,
-                    ),
-                    // Po rozwinięciu pasek ma wyraźny kolor, żeby „Zwiń ustawienia”
-                    // nie ginęło wśród szarych wierszy ustawień
-                    color: _settingsExpanded
-                        ? Theme.of(context).colorScheme.primary
-                        : Colors.grey.shade300,
-                    child: Column(
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(
-                              _settingsExpanded
-                                  ? 'Zwiń ustawienia'
-                                  : 'Rozwiń ustawienia',
-                              style: TextStyle(
-                                fontWeight: _settingsExpanded
-                                    ? FontWeight.bold
-                                    : FontWeight.w500,
-                                color: _settingsExpanded
-                                    ? Theme.of(context).colorScheme.onPrimary
-                                    : null,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Icon(
-                              _settingsExpanded
-                                  ? Icons.keyboard_arrow_up
-                                  : Icons.keyboard_arrow_down,
-                              color: _settingsExpanded
-                                  ? Theme.of(context).colorScheme.onPrimary
-                                  : null,
-                            ),
-                          ],
-                        ),
-                        // Zapamiętany wybór widoczny bez rozwijania ustawień
-                        if (!_settingsExpanded)
-                          Text(
-                            _selectionSummary(),
-                            style: const TextStyle(
-                              fontSize: 13,
-                              color: Colors.black54,
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                ),
-                // Wybór dnia (piątek / sobota-niedziela)
-                if (_settingsExpanded)
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(
-                      vertical: 8,
-                      horizontal: 16,
-                    ),
-                    color: Colors.grey.shade300,
-                    child: Row(
-                      children: [
-                        const Text(
-                          'Dzień: ',
-                          style: TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: SegmentedButton<DayType>(
-                            showSelectedIcon: false,
-                            style: ButtonStyle(
-                              iconColor: WidgetStateProperty.resolveWith((
-                                states,
-                              ) {
-                                if (states.contains(WidgetState.selected)) {
-                                  return Colors.blue;
-                                }
-                                return Colors.grey;
-                              }),
-                            ),
-                            segments: const [
-                              ButtonSegment(
-                                value: DayType.friday,
-                                label: Text('Piątek'),
-                                icon: Icon(Icons.nights_stay),
-                              ),
-                              ButtonSegment(
-                                value: DayType.saturday,
-                                label: Text('Sobota'),
-                                icon: Icon(Icons.nights_stay),
-                              ),
-                            ],
-                            selected: {_dayType},
-                            onSelectionChanged: (newSelection) {
-                              setState(() {
-                                _dayType = newSelection.first;
-                                _normalizeSelectedCircuit();
-                                _initialScrollDone = false;
-                                _lastActiveStationId = null;
-                              });
-                              _saveSelection();
-                            },
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                // Wybór kierunku
-                if (_settingsExpanded)
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(
-                      vertical: 8,
-                      horizontal: 16,
-                    ),
-                    color: Colors.grey.shade200,
-                    child: Row(
-                      children: [
-                        const Text(
-                          'Kierunek: ',
-                          style: TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: SegmentedButton<Direction>(
-                            showSelectedIcon: false,
-                            style: ButtonStyle(
-                              iconColor: WidgetStateProperty.resolveWith((
-                                states,
-                              ) {
-                                if (states.contains(WidgetState.selected)) {
-                                  return Colors.green;
-                                }
-                                return Colors.grey;
-                              }),
-                            ),
-                            segments: _metroLine == MetroLine.m1
-                                ? const [
-                                    ButtonSegment(
-                                      value: Direction.mlociny,
-                                      label: Text('Młociny'),
-                                      icon: Icon(Icons.train),
-                                    ),
-                                    ButtonSegment(
-                                      value: Direction.kabaty,
-                                      label: Text('Kabaty'),
-                                      icon: Icon(Icons.train),
-                                    ),
-                                  ]
-                                : const [
-                                    ButtonSegment(
-                                      value: Direction.mlociny,
-                                      label: Text('Bemowo'),
-                                      icon: Icon(Icons.train),
-                                    ),
-                                    ButtonSegment(
-                                      value: Direction.kabaty,
-                                      label: Text('Bródno'),
-                                      icon: Icon(Icons.train),
-                                    ),
-                                  ],
-                            selected: {_direction},
-                            onSelectionChanged: (newSelection) {
-                              setState(() {
-                                _direction = newSelection.first;
-                                _normalizeSelectedCircuit();
-                                _initialScrollDone = false;
-                                _lastActiveStationId = null;
-                              });
-                              _saveSelection();
-                            },
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                // Wybór obiegu
-                if (_settingsExpanded)
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(
-                      vertical: 8,
-                      horizontal: 16,
-                    ),
-                    color: Colors.grey.shade100,
-                    child: Row(
-                      children: [
-                        const Text(
-                          'Obieg: ',
-                          style: TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: SingleChildScrollView(
-                            scrollDirection: Axis.horizontal,
-                            child: Row(
-                              children: _getCurrentCircuits().map((circuit) {
-                                final isSelected = circuit == _selectedCircuit;
-                                return Padding(
-                                  padding: const EdgeInsets.only(right: 8),
-                                  child: ChoiceChip(
-                                    label: Text('$circuit'),
-                                    selected: isSelected,
-                                    onSelected: (selected) {
-                                      if (selected) {
-                                        setState(() {
-                                          _selectedCircuit = circuit;
-                                        });
-                                        _saveSelection();
-                                      }
-                                    },
-                                  ),
-                                );
-                              }).toList(),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                // Przełącznik okna czasowego
-                if (_settingsExpanded)
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(
-                      vertical: 6,
-                      horizontal: 16,
-                    ),
-                    color: Colors.blue.shade50,
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Text(
-                          'Okno czasowe',
-                          style: TextStyle(fontSize: 14, color: Colors.blue),
-                        ),
-                        Switch(
-                          value: _showTimeWindow,
-                          onChanged: (value) {
-                            setState(() {
-                              _showTimeWindow = value;
-                            });
-                          },
-                        ),
-                        Text(
-                          _showTimeWindow ? '(-59s do +2:59)' : 'Tylko godziny',
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: Colors.blue,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                // Przyciemnienie ekranu
-                if (_settingsExpanded)
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(
-                      vertical: 6,
-                      horizontal: 16,
-                    ),
-                    color: Colors.blue.shade50,
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(
-                          Icons.brightness_6,
-                          size: 20,
-                          color: Colors.blue,
-                        ),
-                        const SizedBox(width: 8),
-                        const Text(
-                          'Przyciemnienie',
-                          style: TextStyle(fontSize: 14, color: Colors.blue),
-                        ),
-                        Expanded(
-                          child: Slider(
-                            value: _screenDimming,
-                            min: 0.0,
-                            max: 0.8,
-                            onChanged: (value) {
-                              setState(() {
-                                _screenDimming = value;
-                              });
-                            },
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                // Ekran zawsze włączony
-                if (_settingsExpanded)
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(
-                      vertical: 6,
-                      horizontal: 16,
-                    ),
-                    color: Colors.blue.shade50,
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(
-                          Icons.screen_lock_portrait,
-                          size: 20,
-                          color: Colors.blue,
-                        ),
-                        const SizedBox(width: 8),
-                        const Text(
-                          'Ekran zawsze włączony',
-                          style: TextStyle(fontSize: 14, color: Colors.blue),
-                        ),
-                        Switch(
-                          value: _keepScreenOn,
-                          onChanged: (value) {
-                            setState(() {
-                              _keepScreenOn = value;
-                              if (value) {
-                                WakelockPlus.enable();
-                              } else {
-                                WakelockPlus.disable();
-                              }
-                            });
-                          },
-                        ),
-                      ],
-                    ),
-                  ),
-                // Alert zbliżającego się odjazdu
-                if (_settingsExpanded)
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(
-                      vertical: 6,
-                      horizontal: 16,
-                    ),
-                    color: Colors.red.shade50,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Icon(
-                              Icons.notifications_active,
-                              size: 20,
-                              color: Colors.red,
-                            ),
-                            const SizedBox(width: 8),
-                            const Text(
-                              'Alert odjazdu',
-                              style: TextStyle(fontSize: 14, color: Colors.red),
-                            ),
-                            Switch(
-                              value: _alertEnabled,
-                              activeThumbColor: Colors.red,
-                              onChanged: (value) =>
-                                  setState(() => _alertEnabled = value),
-                            ),
-                            if (_alertEnabled)
-                              Text(
-                                '${_alertThresholdSeconds}s',
-                                style: const TextStyle(
-                                  fontSize: 13,
-                                  color: Colors.red,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                          ],
-                        ),
-                        if (_alertEnabled)
-                          Slider(
-                            value: _alertThresholdSeconds.toDouble(),
-                            min: 10,
-                            max: 120,
-                            divisions: 22,
-                            activeColor: Colors.red,
-                            label: '${_alertThresholdSeconds}s',
-                            onChanged: (value) => setState(
-                              () => _alertThresholdSeconds = value.round(),
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                // Lista punktów lub komunikat o braku kursów
-                Expanded(
-                  child: isNightTime
-                      ? Builder(
-                          builder: (context) {
-                            // Znajdź indeks aktywnej stacji
-                            int activeIndex = -1;
-                            if (primaryActivePoint != null) {
-                              activeIndex = routePoints.indexWhere(
-                                (p) =>
-                                    p.stationId == primaryActivePoint.stationId,
-                              );
-                            }
-
-                            // Przewiń do aktywnej stacji przy pierwszym uruchomieniu lub zmianie stacji
-                            if (activeIndex >= 0) {
-                              final currentActiveId =
-                                  primaryActivePoint?.stationId;
-                              if (!_initialScrollDone ||
-                                  _lastActiveStationId != currentActiveId) {
-                                _lastActiveStationId = currentActiveId;
-                                _initialScrollDone = true;
-                                WidgetsBinding.instance.addPostFrameCallback((
-                                  _,
-                                ) {
-                                  _scrollToActiveStation(activeIndex);
-                                });
-                              }
-                            }
-
-                            return ListView.builder(
-                              controller: _scrollController,
-                              itemExtent: _cardHeight,
-                              itemCount: routePoints.length,
-                              itemBuilder: (context, index) {
-                                return RoutePointCard(
-                                  point: routePoints[index],
-                                  currentTime: _currentTime,
-                                  circuit: _selectedCircuit,
-                                  showTimeWindow: _showTimeWindow,
-                                  primaryActiveStationId:
-                                      primaryActivePoint?.stationId,
-                                  direction: _direction,
-                                );
-                              },
-                            );
-                          },
-                        )
-                      : Center(
-                          child: SingleChildScrollView(
-                            padding: const EdgeInsets.all(32),
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(
-                                  Icons.nightlight_round,
-                                  size: 80,
-                                  color: Colors.grey.shade400,
-                                ),
-                                const SizedBox(height: 24),
-                                Text(
-                                  'Poza godzinami nocnych kursów',
-                                  style: TextStyle(
-                                    fontSize: 20,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.grey.shade600,
-                                  ),
-                                  textAlign: TextAlign.center,
-                                ),
-                                const SizedBox(height: 12),
-                                Text(
-                                  'Nocne kursy metra odbywają się\nw godzinach 00:00 - 03:00\n(piątek/sobota i sobota/niedziela)',
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    color: Colors.grey.shade500,
-                                  ),
-                                  textAlign: TextAlign.center,
-                                ),
-                                const SizedBox(height: 24),
-                                Text(
-                                  'Użyj edycji czasu powyżej,\naby przetestować rozkład',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: Colors.blue.shade400,
-                                  ),
-                                  textAlign: TextAlign.center,
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
+                Icon(
+                  expanded
+                      ? Icons.keyboard_arrow_up
+                      : Icons.keyboard_arrow_down,
+                  color: expanded ? Colors.white : AppColors.textSecondary,
                 ),
               ],
             ),
           ),
         ),
-        // Overlay przyciemniający ekran (na całej aplikacji w tym AppBar)
-        if (_screenDimming > 0)
-          Positioned.fill(
-            child: IgnorePointer(
-              child: Container(color: Colors.black.withOpacity(_screenDimming)),
+      ),
+    );
+  }
+
+  void _toggleSettings() {
+    setState(() {
+      _settingsExpanded = !_settingsExpanded;
+      // Lista stacji wraca po zwinięciu, więc przewiń ją znów do aktywnej
+      _initialScrollDone = false;
+      _lastActiveStationId = null;
+    });
+  }
+
+  Widget _buildSettingRow(String label, Widget child) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        children: [
+          SizedBox(width: 78, child: Text(label, style: _settingLabelStyle)),
+          Expanded(child: child),
+        ],
+      ),
+    );
+  }
+
+  // Rozwinięte ustawienia
+  Widget _buildSettingsPanel() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Column(
+          children: [
+            // Wybór dnia (piątek / sobota-niedziela)
+            _buildSettingRow(
+              'Dzień',
+              SegmentedButton<DayType>(
+                showSelectedIcon: false,
+                segments: const [
+                  ButtonSegment(
+                    value: DayType.friday,
+                    label: Text('Piątek'),
+                    icon: Icon(Icons.nights_stay),
+                  ),
+                  ButtonSegment(
+                    value: DayType.saturday,
+                    label: Text('Sobota'),
+                    icon: Icon(Icons.nights_stay),
+                  ),
+                ],
+                selected: {_dayType},
+                onSelectionChanged: (newSelection) {
+                  setState(() {
+                    _dayType = newSelection.first;
+                    _normalizeSelectedCircuit();
+                    _initialScrollDone = false;
+                    _lastActiveStationId = null;
+                  });
+                  _saveSelection();
+                },
+              ),
             ),
-          ),
-      ],
+            _settingsDivider,
+            // Wybór kierunku
+            _buildSettingRow(
+              'Kierunek',
+              SegmentedButton<Direction>(
+                showSelectedIcon: false,
+                segments: [
+                  for (final direction in Direction.values)
+                    ButtonSegment(
+                      value: direction,
+                      label: Text(_directionName(direction)),
+                      icon: const Icon(Icons.train),
+                    ),
+                ],
+                selected: {_direction},
+                onSelectionChanged: (newSelection) =>
+                    _setDirection(newSelection.first),
+              ),
+            ),
+            _settingsDivider,
+            // Wybór obiegu
+            _buildSettingRow(
+              'Obieg',
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: _getCurrentCircuits().map((circuit) {
+                    final isSelected = circuit == _selectedCircuit;
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: ChoiceChip(
+                        label: Text('$circuit'),
+                        selected: isSelected,
+                        onSelected: (selected) {
+                          if (selected) {
+                            setState(() {
+                              _selectedCircuit = circuit;
+                            });
+                            _saveSelection();
+                          }
+                        },
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+            ),
+            _settingsDivider,
+            // Przełącznik okna czasowego
+            Row(
+              children: [
+                const Icon(Icons.timelapse, size: 20, color: AppColors.primary),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Okno czasowe', style: _settingLabelStyle),
+                      Text(
+                        _showTimeWindow ? '-59s do +2:59' : 'Tylko godziny',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Switch(
+                  value: _showTimeWindow,
+                  onChanged: (value) {
+                    setState(() {
+                      _showTimeWindow = value;
+                    });
+                  },
+                ),
+              ],
+            ),
+            _settingsDivider,
+            // Przyciemnienie ekranu
+            Row(
+              children: [
+                const Icon(
+                  Icons.brightness_6,
+                  size: 20,
+                  color: AppColors.primary,
+                ),
+                const SizedBox(width: 10),
+                const Text('Przyciemnienie', style: _settingLabelStyle),
+                Expanded(
+                  child: Slider(
+                    value: _screenDimming,
+                    min: 0.0,
+                    max: 0.8,
+                    onChanged: (value) {
+                      setState(() {
+                        _screenDimming = value;
+                      });
+                    },
+                  ),
+                ),
+              ],
+            ),
+            _settingsDivider,
+            // Ekran zawsze włączony
+            Row(
+              children: [
+                const Icon(
+                  Icons.screen_lock_portrait,
+                  size: 20,
+                  color: AppColors.primary,
+                ),
+                const SizedBox(width: 10),
+                const Expanded(
+                  child: Text(
+                    'Ekran zawsze włączony',
+                    style: _settingLabelStyle,
+                  ),
+                ),
+                Switch(
+                  value: _keepScreenOn,
+                  onChanged: (value) {
+                    setState(() {
+                      _keepScreenOn = value;
+                      if (value) {
+                        WakelockPlus.enable();
+                      } else {
+                        WakelockPlus.disable();
+                      }
+                    });
+                  },
+                ),
+              ],
+            ),
+            _settingsDivider,
+            // Alert zbliżającego się odjazdu
+            Row(
+              children: [
+                const Icon(
+                  Icons.notifications_active,
+                  size: 20,
+                  color: AppColors.danger,
+                ),
+                const SizedBox(width: 10),
+                const Expanded(
+                  child: Text('Alert odjazdu', style: _settingLabelStyle),
+                ),
+                if (_alertEnabled)
+                  Text(
+                    '${_alertThresholdSeconds}s',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: AppColors.danger,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                Switch(
+                  value: _alertEnabled,
+                  activeThumbColor: AppColors.danger,
+                  onChanged: (value) => setState(() => _alertEnabled = value),
+                ),
+              ],
+            ),
+            if (_alertEnabled)
+              Slider(
+                value: _alertThresholdSeconds.toDouble(),
+                min: 10,
+                max: 120,
+                divisions: 22,
+                activeColor: AppColors.danger,
+                label: '${_alertThresholdSeconds}s',
+                onChanged: (value) =>
+                    setState(() => _alertThresholdSeconds = value.round()),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Lista stacji z przewijaniem do aktywnej
+  Widget _buildStationList(
+    List<RoutePoint> routePoints,
+    RoutePoint? primaryActivePoint,
+  ) {
+    // Znajdź indeks aktywnej stacji
+    int activeIndex = -1;
+    if (primaryActivePoint != null) {
+      activeIndex = routePoints.indexWhere(
+        (p) => p.stationId == primaryActivePoint.stationId,
+      );
+    }
+
+    // Przewiń do aktywnej stacji przy pierwszym uruchomieniu lub zmianie stacji
+    if (activeIndex >= 0) {
+      final currentActiveId = primaryActivePoint?.stationId;
+      if (!_initialScrollDone || _lastActiveStationId != currentActiveId) {
+        _lastActiveStationId = currentActiveId;
+        _initialScrollDone = true;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _scrollToActiveStation(activeIndex);
+        });
+      }
+    }
+
+    return ListView.builder(
+      controller: _scrollController,
+      itemExtent: _cardHeight,
+      padding: const EdgeInsets.only(bottom: 8),
+      itemCount: routePoints.length,
+      itemBuilder: (context, index) {
+        return RoutePointCard(
+          point: routePoints[index],
+          currentTime: _currentTime,
+          circuit: _selectedCircuit,
+          showTimeWindow: _showTimeWindow,
+          primaryActiveStationId: primaryActivePoint?.stationId,
+          direction: _direction,
+        );
+      },
+    );
+  }
+
+  // Komunikat poza godzinami nocnych kursów
+  Widget _buildOffHoursMessage() {
+    return const Center(
+      child: SingleChildScrollView(
+        padding: EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.nightlight_round, size: 80, color: AppColors.textMuted),
+            SizedBox(height: 24),
+            Text(
+              'Poza godzinami nocnych kursów',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: AppColors.textPrimary,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            SizedBox(height: 12),
+            Text(
+              'Nocne kursy metra odbywają się\nw godzinach 00:00 - 03:00\n(piątek/sobota i sobota/niedziela)',
+              style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
+              textAlign: TextAlign.center,
+            ),
+            SizedBox(height: 24),
+            Text(
+              'Stuknij zegar albo ołówek obok niego,\naby przetestować rozkład',
+              style: TextStyle(fontSize: 12, color: AppColors.primary),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
