@@ -57,6 +57,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   String _alertMessage = '';
   String? _lastAlertKey;
   Timer? _alertDismissTimer;
+  String _appVersion = ''; // Numer wersji pokazywany w tytule
 
   @override
   void initState() {
@@ -70,6 +71,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _hourController.text = _currentTime.hour.toString().padLeft(2, '0');
     _minuteController.text = _currentTime.minute.toString().padLeft(2, '0');
     _restoreSelection();
+    _loadAppVersion();
     _checkForUpdate();
     // Aktualizuj czas co sekundę
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
@@ -124,6 +126,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     await prefs.setString(_prefDayType, _dayType.name);
     await prefs.setString(_prefDirection, _direction.name);
     await prefs.setInt(_prefCircuit, _selectedCircuit);
+  }
+
+  Future<void> _loadAppVersion() async {
+    final version = await UpdateService.currentVersion();
+    if (mounted) setState(() => _appVersion = version);
   }
 
   // Sprawdź, czy jest nowsza wersja aplikacji, i zaproponuj aktualizację
@@ -246,6 +253,18 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
   }
 
+  // Krótki opis zapamiętanego wyboru, np. „Sobota · kierunek Młociny · obieg 4”
+  String _selectionSummary() {
+    final day = _dayType == DayType.friday ? 'Piątek' : 'Sobota';
+    final String direction;
+    if (_metroLine == MetroLine.m1) {
+      direction = _direction == Direction.mlociny ? 'Młociny' : 'Kabaty';
+    } else {
+      direction = _direction == Direction.mlociny ? 'Bemowo' : 'Bródno';
+    }
+    return '$day · kierunek $direction · obieg $_selectedCircuit';
+  }
+
   String _directionLabelForPoint(RoutePoint point) {
     if (point.stationId.startsWith('C')) {
       return _direction == Direction.mlociny ? '→ Bemowo' : '→ Bródno';
@@ -353,7 +372,21 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         Positioned.fill(
           child: Scaffold(
             appBar: AppBar(
-              title: const Text('Metro - Jazdy Nocne'),
+              title: Text.rich(
+                TextSpan(
+                  text: 'Metro - Jazdy Nocne',
+                  children: [
+                    if (_appVersion.isNotEmpty)
+                      TextSpan(
+                        text: '  v$_appVersion',
+                        style: const TextStyle(
+                          fontSize: 14,
+                          color: Colors.black54,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
               centerTitle: true,
               backgroundColor: Theme.of(context).colorScheme.primaryContainer,
             ),
@@ -753,22 +786,49 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       vertical: 8,
                       horizontal: 16,
                     ),
-                    color: Colors.grey.shade300,
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
+                    // Po rozwinięciu pasek ma wyraźny kolor, żeby „Zwiń ustawienia”
+                    // nie ginęło wśród szarych wierszy ustawień
+                    color: _settingsExpanded
+                        ? Theme.of(context).colorScheme.primary
+                        : Colors.grey.shade300,
+                    child: Column(
                       children: [
-                        Text(
-                          _settingsExpanded
-                              ? 'Zwiń ustawienia'
-                              : 'Rozwiń ustawienia',
-                          style: const TextStyle(fontWeight: FontWeight.w500),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              _settingsExpanded
+                                  ? 'Zwiń ustawienia'
+                                  : 'Rozwiń ustawienia',
+                              style: TextStyle(
+                                fontWeight: _settingsExpanded
+                                    ? FontWeight.bold
+                                    : FontWeight.w500,
+                                color: _settingsExpanded
+                                    ? Theme.of(context).colorScheme.onPrimary
+                                    : null,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Icon(
+                              _settingsExpanded
+                                  ? Icons.keyboard_arrow_up
+                                  : Icons.keyboard_arrow_down,
+                              color: _settingsExpanded
+                                  ? Theme.of(context).colorScheme.onPrimary
+                                  : null,
+                            ),
+                          ],
                         ),
-                        const SizedBox(width: 8),
-                        Icon(
-                          _settingsExpanded
-                              ? Icons.keyboard_arrow_up
-                              : Icons.keyboard_arrow_down,
-                        ),
+                        // Zapamiętany wybór widoczny bez rozwijania ustawień
+                        if (!_settingsExpanded)
+                          Text(
+                            _selectionSummary(),
+                            style: const TextStyle(
+                              fontSize: 13,
+                              color: Colors.black54,
+                            ),
+                          ),
                       ],
                     ),
                   ),
