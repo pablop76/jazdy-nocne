@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:ota_update/ota_update.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
 /// Nowsze wydanie aplikacji znalezione na GitHubie
@@ -48,24 +49,39 @@ class UpdateService {
         '',
       );
       if (!isNewer(latest, current)) return null;
-      final assets = release['assets'] as List<dynamic>? ?? [];
-      for (final asset in assets) {
-        final url =
-            (asset as Map<String, dynamic>)['browser_download_url']
-                as String? ??
-            '';
-        if (url.endsWith('.apk')) {
-          return AppUpdate(
-            version: latest,
-            currentVersion: current,
-            apkUrl: url,
-          );
-        }
-      }
-      return null;
+      final url = apkUrlFor(
+        release['assets'] as List<dynamic>? ?? [],
+        await OtaUpdate().getAbi(),
+      );
+      if (url == null) return null;
+      return AppUpdate(version: latest, currentVersion: current, apkUrl: url);
     } catch (_) {
       return null;
     }
+  }
+
+  /// Nazwa pliku APK w wydaniu dla architektury procesora telefonu.
+  /// Wydanie ma osobny plik na każdą architekturę, żeby pobieranie było małe.
+  static String assetNameFor(String? abi) {
+    switch (abi) {
+      case 'armeabi-v7a':
+        return 'jazdy-nocne-32bit.apk';
+      case 'x86_64':
+        return 'jazdy-nocne-x86_64.apk';
+      default:
+        return 'jazdy-nocne.apk';
+    }
+  }
+
+  /// Adres pliku APK pasującego do telefonu albo null, gdy wydanie go nie ma
+  static String? apkUrlFor(List<dynamic> assets, String? abi) {
+    final name = assetNameFor(abi);
+    for (final asset in assets) {
+      if (asset is Map && asset['name'] == name) {
+        return asset['browser_download_url'] as String?;
+      }
+    }
+    return null;
   }
 
   /// Porównuje numery wersji w postaci 2.6.0
