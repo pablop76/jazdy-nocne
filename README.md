@@ -20,6 +20,7 @@ Aplikacja działa na Androidzie 7 lub nowszym.
 
 1. Pobierz plik [jazdy-nocne.apk](https://github.com/pablop76/jazdy-nocne/releases/latest/download/jazdy-nocne.apk) z [najnowszego wydania](https://github.com/pablop76/jazdy-nocne/releases/latest).
 2. Otwórz pobrany plik i zezwól na instalację z tego źródła.
+3. Jeśli Google Play Protect zaproponuje sprawdzenie aplikacji, wybierz skanowanie, a po nim instalację.
 
 Jeden plik pasuje do wszystkich telefonów, nie trzeba wybierać wersji pod procesor.
 
@@ -27,7 +28,7 @@ Jeden plik pasuje do wszystkich telefonów, nie trzeba wybierać wersji pod proc
 
 ## Aktualizacje
 
-Od wersji 2.6.0 aplikacja przy uruchomieniu sama sprawdza, czy jest nowsze wydanie. Jeśli jest, pokazuje okno z przyciskiem „Aktualizuj”, pobiera plik i otwiera instalator. Za pierwszym razem Android poprosi o zgodę na instalowanie aplikacji z tego źródła.
+Od wersji 2.6.0 aplikacja przy uruchomieniu sama sprawdza, czy jest nowsze wydanie. Jeśli jest, pokazuje okno z przyciskiem „Aktualizuj”, pobiera plik i otwiera instalator. Za pierwszym razem Android poprosi o zgodę na instalowanie aplikacji z tego źródła, a Google Play Protect może zaproponować skanowanie. Po włączeniu zgody instalator sam wraca na ekran, wystarczy potwierdzić aktualizację.
 
 Lista zmian w kolejnych wersjach jest na stronie [wydań](https://github.com/pablop76/jazdy-nocne/releases).
 
