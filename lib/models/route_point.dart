@@ -4,10 +4,10 @@ class RoutePoint {
   final String name;
   final Map<int, String> scheduleByCircuit; // Obieg -> godzina "HH:mm" (pierwszy kurs)
   final Map<int, String>? secondScheduleByCircuit; // Obieg -> godzina "HH:mm" (drugi kurs)
-  final String? firstDepartureMonThu;
-  final String? firstDepartureFriSat;
-  final String? lastDepartureMonThu;
-  final String? lastDepartureFriSat;
+  final String? firstDepartureMonThu; // pierwszy odjazd w dni robocze
+  final String? firstDepartureWeekend; // w sobotę i niedzielę, gdy jest inny
+  final String? lastDepartureMonThu; // ostatni odjazd pon.-czw. i w niedzielę
+  final String? lastDepartureFriSat; // ostatni kurs nocny (piątek, sobota)
 
   const RoutePoint({
     required this.stationId,
@@ -15,7 +15,7 @@ class RoutePoint {
     required this.scheduleByCircuit,
     this.secondScheduleByCircuit,
     this.firstDepartureMonThu,
-    this.firstDepartureFriSat,
+    this.firstDepartureWeekend,
     this.lastDepartureMonThu,
     this.lastDepartureFriSat,
   });

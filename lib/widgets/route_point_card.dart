@@ -53,13 +53,6 @@ class RoutePointCard extends StatelessWidget {
     return direction == Direction.mlociny ? '→ Młociny' : '→ Kabaty';
   }
 
-  // Pobierz najwcześniejszy czas z formatu "05:29/05:21/05:11/05:00" -> "05:00"
-  String _getEarliestTime(String? timeString) {
-    if (timeString == null) return '--:--';
-    final parts = timeString.split('/');
-    return parts.last; // Ostatni czas jest najwcześniejszy (stacja startowa)
-  }
-
   @override
   Widget build(BuildContext context) {
     var status = point.getTimeWindowStatus(currentTime, circuit);
@@ -218,16 +211,16 @@ class RoutePointCard extends StatelessWidget {
                             point.lastDepartureMonThu != null) ...[
                           if (point.firstDepartureMonThu != null)
                             _buildDepartureLine(
-                              'Pierwszy: ${_getEarliestTime(point.firstDepartureMonThu)}',
+                              'Pierwszy: ${point.firstDepartureMonThu}',
                               dimmed
                                   ? AppColors.textMuted
                                   : AppColors.successBright,
                             ),
-                          if (point.firstDepartureFriSat != null &&
-                              _getEarliestTime(point.firstDepartureFriSat) !=
-                                  _getEarliestTime(point.firstDepartureMonThu))
+                          // Sobota i niedziela tylko tam, gdzie pierwszy
+                          // pociąg rusza o innej godzinie niż w dni robocze
+                          if (point.firstDepartureWeekend != null)
                             _buildDepartureLine(
-                              'Pierwszy (pt-sb): ${_getEarliestTime(point.firstDepartureFriSat)}',
+                              'Pierwszy (sb-nd): ${point.firstDepartureWeekend}',
                               dimmed
                                   ? AppColors.textMuted
                                   : AppColors.successBright,
