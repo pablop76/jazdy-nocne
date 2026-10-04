@@ -11,7 +11,7 @@ Aplikacja ułatwiająca trzymanie czasu odjazdu zgodnie z rozkładem jazd nocnyc
 - Rozkład piątkowy albo sobotni ustawia się sam według daty; można go przełączyć ręcznie
 - Kierunek wynika z rozkładu: aplikacja pokazuje kurs, który wybrany obieg właśnie jedzie albo zaraz zacznie, i sama przełącza listę stacji na kurs powrotny
 - Odliczanie czasu do odjazdu, podświetlenie aktywnej stacji i czas do końca okna, w którym nie ma odchyłki od rozkładu
-- Zapowiedź następnego kursu na końcu listy stacji i komunikat po ostatnim kursie obiegu
+- Zapowiedź następnego kursu na końcu listy stacji i komunikat po ostatnim kursie obiegu, razem z godzinami zjazdu bez pasażerów, jeśli obieg go ma
 - Alert zbliżającego się odjazdu: baner i komunikat głosowy, od 10 do 120 sekund przed odjazdem
 - Czas testowy, żeby sprawdzić rozkład poza godzinami kursów: wyraźnie oznaczony, z powrotem do czasu rzeczywistego jednym stuknięciem
 - Przyciemnianie ekranu i blokada wygaszania; ustawienia są zapamiętywane

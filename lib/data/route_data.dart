@@ -1,3 +1,4 @@
+import '../models/deadhead.dart';
 import '../models/route_point.dart';
 
 /// Typ dnia: piątek lub sobota
@@ -382,6 +383,17 @@ class RouteData {
     }
   }
   
+  /// Zjazdy bez pasażerów po ostatnim kursie nocnym (piątek i sobota),
+  /// według rozkładu ważnego od 01.09.2026: obieg -> stacje z godzinami
+  static const Map<int, List<DeadheadStop>> deadheads = {
+    3: [
+      DeadheadStop('A1', '02:05:45'), DeadheadStop('A7', '02:16:45'), DeadheadStop('A11', '02:23:55'),
+      DeadheadStop('A14', '02:27:55'), DeadheadStop('A18', '02:34:45'),
+    ],
+    4: [DeadheadStop('A1', '02:15:30'), DeadheadStop('A7', '02:26:30'), DeadheadStop('A11', '02:33:40')],
+    6: [DeadheadStop('A1', '02:31:15'), DeadheadStop('A7', '02:42:15')],
+  };
+
   /// Obiegi startujące z Kabat (kierunek Młociny pierwszy)
   static const List<int> circuitsFromKabaty = [1, 3, 4, 6];
   

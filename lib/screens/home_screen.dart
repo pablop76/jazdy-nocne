@@ -9,6 +9,7 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../data/route_data.dart';
 import '../data/route_data_m2.dart';
+import '../models/deadhead.dart';
 import '../models/route_point.dart';
 import '../services/direction_service.dart';
 import '../services/schedule_day.dart';
@@ -283,6 +284,21 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     return _metroLine == MetroLine.m1
         ? RouteData.getRoute(direction, _dayType)
         : RouteDataM2.getRoute(direction, _dayType);
+  }
+
+  // Zjazd bez pasażerów po ostatnim kursie wybranego obiegu, jeśli go ma
+  List<DeadheadStop>? _deadhead() {
+    return _metroLine == MetroLine.m1
+        ? RouteData.deadheads[_selectedCircuit]
+        : RouteDataM2.getDeadhead(_selectedCircuit, _dayType);
+  }
+
+  // Pełna nazwa stacji wybranej linii, np. „A18 - Plac Wilsona”
+  String _stationName(String stationId) {
+    for (final point in _routeFor(Direction.mlociny)) {
+      if (point.stationId == stationId) return point.name;
+    }
+    return stationId;
   }
 
   // Kursy wybranego obiegu w obu kierunkach, w kolejności odjazdów
@@ -1575,8 +1591,27 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
-  // Karta na końcu listy: następny kurs obiegu albo informacja, że to ostatni
+  // Karta na końcu listy: następny kurs obiegu, zjazd bez pasażerów albo
+  // informacja, że to ostatni kurs
   Widget _buildNextRunCard(CircuitRun? nextRun) {
+    final deadhead = nextRun == null ? _deadhead() : null;
+    final String title;
+    final String text;
+    if (nextRun != null) {
+      title = 'Następny kurs';
+      text =
+          'Odjazd ${DirectionService.formatMinutes(nextRun.start)} · '
+          '${nextRun.startStation} → ${_directionName(nextRun.direction)}';
+    } else if (deadhead != null) {
+      title = 'Po tym kursie';
+      text =
+          'Zjazd bez pasażerów ${deadhead.first.time}\n'
+          '${_stationName(deadhead.first.stationId)} → '
+          '${_stationName(deadhead.last.stationId)}';
+    } else {
+      title = 'Koniec kursów';
+      text = 'To ostatni kurs obiegu $_selectedCircuit';
+    }
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -1588,7 +1623,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       child: Row(
         children: [
           Icon(
-            nextRun == null ? Icons.flag_outlined : Icons.swap_vert,
+            nextRun == null && deadhead == null
+                ? Icons.flag_outlined
+                : Icons.swap_vert,
             color: AppColors.textSecondary,
           ),
           const SizedBox(width: 14),
@@ -1598,18 +1635,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  nextRun == null ? 'Koniec kursów' : 'Następny kurs',
+                  title,
                   style: const TextStyle(
                     fontSize: 13,
                     color: AppColors.textSecondary,
                   ),
                 ),
                 Text(
-                  nextRun == null
-                      ? 'To ostatni kurs obiegu $_selectedCircuit'
-                      : 'Odjazd ${DirectionService.formatMinutes(nextRun.start)} · '
-                            '${nextRun.startStation} → '
-                            '${_directionName(nextRun.direction)}',
+                  text,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
@@ -1637,14 +1670,97 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
-  // Komunikat po ostatnim kursie obiegu: nie ma już czego pilnować
+  // Komunikat po ostatnim kursie obiegu; jeśli obieg ma jeszcze zjazd bez
+  // pasażerów, pod spodem są jego godziny
   Widget _buildCircuitFinishedMessage(CircuitRun lastRun) {
+    final deadhead = _deadhead();
+    final arrival = DirectionService.formatMinutes(lastRun.end);
     return _buildMessageCard(
       icon: Icons.flag_outlined,
       title: 'Obieg $_selectedCircuit zakończył kursy',
-      text:
-          'Ostatni przyjazd: ${DirectionService.formatMinutes(lastRun.end)}\n${lastRun.endStation}',
+      // Ze zjazdem całość ma się zmieścić bez przewijania, stąd jedna linia
+      text: deadhead == null
+          ? 'Ostatni przyjazd: $arrival\n${lastRun.endStation}'
+          : 'Ostatni przyjazd: $arrival · ${lastRun.endStation}',
+      extra: deadhead == null ? null : _buildDeadheadInfo(deadhead),
     );
+  }
+
+  // Zjazd bez pasażerów: kiedy rusza i o której jest na kolejnych stacjach
+  Widget _buildDeadheadInfo(List<DeadheadStop> stops) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceHigh,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        children: [
+          const Text(
+            'Zjazd bez pasażerów',
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.bold,
+              color: AppColors.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            _deadheadStatus(stops),
+            style: const TextStyle(fontSize: 14, color: AppColors.primaryLight),
+          ),
+          const SizedBox(height: 10),
+          for (final stop in stops)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 2),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      _stationName(stop.stationId),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    stop.time,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary,
+                      fontFeatures: [FontFeature.tabularFigures()],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  // Stan zjazdu względem zegara: przed odjazdem, w trakcie albo po
+  String _deadheadStatus(List<DeadheadStop> stops) {
+    final toStart = stops.first
+        .timeOn(_currentTime)
+        .difference(_currentTime)
+        .inSeconds;
+    if (toStart > 0) {
+      return toStart < 60
+          ? 'odjazd za ${toStart}s'
+          : 'odjazd za ${toStart ~/ 60}min ${toStart % 60}s';
+    }
+    final toEnd = stops.last
+        .timeOn(_currentTime)
+        .difference(_currentTime)
+        .inSeconds;
+    return toEnd > 0 ? 'w trakcie' : 'zakończony';
   }
 
   // Karta z komunikatem zamiast listy stacji
@@ -1653,7 +1769,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     required String title,
     required String text,
     String? hint,
+    Widget? extra,
   }) {
+    // Z dodatkową treścią karta jest ciaśniejsza, żeby nie trzeba było przewijać
+    final compact = extra != null;
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
       child: Container(
@@ -1665,7 +1784,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         ),
         child: Center(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
+            padding: EdgeInsets.all(compact ? 16 : 24),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
@@ -1677,9 +1796,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     end: Alignment.bottomRight,
                     colors: [Color(0xFFC9D6EA), AppColors.textMuted],
                   ).createShader(bounds),
-                  child: Icon(icon, size: 76),
+                  child: Icon(icon, size: compact ? 36 : 76),
                 ),
-                const SizedBox(height: 24),
+                SizedBox(height: compact ? 10 : 24),
                 Text(
                   title,
                   style: const TextStyle(
@@ -1689,7 +1808,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   ),
                   textAlign: TextAlign.center,
                 ),
-                const SizedBox(height: 12),
+                SizedBox(height: compact ? 6 : 12),
                 Text(
                   text,
                   style: const TextStyle(
@@ -1698,6 +1817,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   ),
                   textAlign: TextAlign.center,
                 ),
+                if (extra != null) ...[const SizedBox(height: 14), extra],
                 if (hint != null) ...[
                   const SizedBox(height: 24),
                   Text(

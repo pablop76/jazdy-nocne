@@ -1,3 +1,4 @@
+import '../models/deadhead.dart';
 import '../models/route_point.dart';
 import 'route_data.dart';
 
@@ -137,6 +138,16 @@ class RouteDataM2 {
 
   static const List<int> bemowoCircuitsFriday = [3, 5, 7, 10, 11, 1, 3, 5, 7];
   static const List<int> bemowoCircuitsSaturday = [2, 3, 5, 7, 9, 10, 2, 3, 5];
+
+  // Zjazdy bez pasażerów po ostatnim kursie nocnym, według rozkładu ważnego
+  // od 01.09.2026. W sobotę obiegi nocne ich nie mają.
+  static const Map<int, List<DeadheadStop>> deadheadsFriday = {
+    10: [DeadheadStop('C21', '02:21:00'), DeadheadStop('C18', '02:27:00')],
+  };
+
+  static List<DeadheadStop>? getDeadhead(int circuit, DayType dayType) {
+    return dayType == DayType.friday ? deadheadsFriday[circuit] : null;
+  }
 
   static List<int> getAvailableCircuits(Direction direction, DayType dayType) {
     final sequence = _getCircuitSequence(direction, dayType);
