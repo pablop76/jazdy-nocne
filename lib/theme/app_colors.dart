@@ -7,8 +7,8 @@ class AppColors {
   static const Color surface = Color(0xFF111C2E); // karty
   static const Color surfaceHigh = Color(0xFF17253B); // pigułki, pola
   static const Color border = Color(0xFF22324D);
-  static const Color headerGlow = Color(0xFF10294D); // poświata w nagłówku
-  static const Color headerArt = Color(0xFF1B3F73); // zarys pociągu w nagłówku
+  static const Color borderStrong = Color(0xFF34486A); // obrys pól wyboru
+  static const Color headerPhotoLight = Color(0xFF3F8FEA); // światła zdjęcia
 
   // Teksty
   static const Color textPrimary = Colors.white;
@@ -17,6 +17,8 @@ class AppColors {
 
   // Akcenty
   static const Color primary = Color(0xFF1E88FF);
+  static const Color primaryLight = Color(0xFF4DA3FF);
+  static const Color primarySurface = Color(0xFF12305A); // zaznaczone pole
   static const Color success = Color(0xFF22A45D);
   static const Color successDark = Color(0xFF178A48);
   static const Color successBright = Color(0xFF4CD080);

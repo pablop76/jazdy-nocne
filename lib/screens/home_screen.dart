@@ -12,6 +12,7 @@ import '../data/route_data_m2.dart';
 import '../models/route_point.dart';
 import '../services/update_service.dart';
 import '../theme/app_colors.dart';
+import '../widgets/app_header.dart';
 import '../widgets/route_point_card.dart';
 import '../widgets/update_dialog.dart';
 
@@ -271,89 +272,113 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    // Pokaż overlay z ostrzeżeniem jeśli nie zaakceptowano
-    if (!_disclaimerAccepted) {
-      return Scaffold(
-        backgroundColor: Colors.black,
-        body: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24.0),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(
-                  Icons.warning_amber_rounded,
-                  color: Colors.red,
-                  size: 80,
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      // Jasne ikony paska stanu na ciemnym tle
+      value: SystemUiOverlayStyle.light,
+      child: _disclaimerAccepted ? _buildMainScreen() : _buildDisclaimer(),
+    );
+  }
+
+  // Ostrzeżenie pokazywane po uruchomieniu, przed właściwym ekranem
+  Widget _buildDisclaimer() {
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      body: Column(
+        children: [
+          AppHeader(version: _appVersion, showPhoto: false),
+          Expanded(
+            child: SafeArea(
+              top: false,
+              child: Center(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 32,
+                    vertical: 24,
+                  ),
+                  child: Column(
+                    children: [
+                      const Icon(
+                        Icons.warning_amber_rounded,
+                        color: AppColors.warning,
+                        size: 72,
+                      ),
+                      const SizedBox(height: 16),
+                      const Text(
+                        'Uwaga',
+                        style: TextStyle(
+                          fontSize: 28,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 28,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.surface,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: AppColors.borderStrong),
+                        ),
+                        child: const Text(
+                          'Korzystanie podczas prowadzenia pociągu metra '
+                          'jest zabronione.',
+                          style: TextStyle(
+                            fontSize: 19,
+                            fontWeight: FontWeight.w600,
+                            height: 1.35,
+                            color: AppColors.textPrimary,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      const Text(
+                        'Aplikacja przeznaczona wyłącznie\ndo użytku prywatnego.',
+                        style: TextStyle(
+                          fontSize: 15,
+                          color: AppColors.textSecondary,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 28),
+                      FilledButton(
+                        onPressed: () {
+                          // Odtwórz dźwięk powitalny
+                          _audioPlayer.play(AssetSource('audio/welcome.mp3'));
+                          // Zmień ekran
+                          setState(() {
+                            _disclaimerAccepted = true;
+                          });
+                        },
+                        style: FilledButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          foregroundColor: Colors.white,
+                          minimumSize: const Size(250, 52),
+                          shape: const StadiumBorder(),
+                        ),
+                        child: const Text(
+                          'Rozumiem i akceptuję',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-                const SizedBox(height: 24),
-                const Text(
-                  '⚠️ UWAGA ⚠️',
-                  style: TextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.red,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 24),
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.red.shade900.withOpacity(0.3),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.red, width: 2),
-                  ),
-                  child: const Text(
-                    'KORZYSTANIE PODCZAS PROWADZENIA\nPOCIĄGU METRA JEST ZABRONIONE',
-                    style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-                const SizedBox(height: 24),
-                const Text(
-                  'Aplikacja przeznaczona wyłącznie\ndo użytku prywatnego.',
-                  style: TextStyle(
-                    fontSize: 18,
-                    color: Colors.white,
-                    fontWeight: FontWeight.w500,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 32),
-                ElevatedButton(
-                  onPressed: () {
-                    // Odtwórz dźwięk powitalny
-                    _audioPlayer.play(AssetSource('audio/welcome.mp3'));
-                    // Zmień ekran
-                    setState(() {
-                      _disclaimerAccepted = true;
-                    });
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.red,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 48,
-                      vertical: 16,
-                    ),
-                  ),
-                  child: const Text(
-                    'ROZUMIEM I AKCEPTUJĘ',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
-        ),
-      );
-    }
+        ],
+      ),
+    );
+  }
 
+  Widget _buildMainScreen() {
     // Stacje dla wybranej linii, kierunku i dnia
     final routePoints = _metroLine == MetroLine.m1
         ? RouteData.getRoute(_direction, _dayType)
@@ -364,158 +389,83 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final isNightTime = _isNightServiceTime();
     final primaryActivePoint = _computePrimaryActivePoint(routePoints);
 
-    return AnnotatedRegion<SystemUiOverlayStyle>(
-      // Jasne ikony paska stanu na ciemnym tle
-      value: SystemUiOverlayStyle.light,
-      child: Stack(
-        children: [
-          Positioned.fill(
-            child: Scaffold(
-              backgroundColor: AppColors.background,
-              // Klawiatura przy edycji czasu zasłania listę zamiast ściskać układ
-              resizeToAvoidBottomInset: false,
-              body: SafeArea(
-                child: Column(
-                  children: [
-                    _buildHeader(),
-                    if (_showAlertBanner) _buildAlertBanner(),
-                    _buildLineSelector(),
-                    _buildClock(),
-                    _buildActiveStation(primaryActivePoint),
-                    _buildSelectionChips(),
-                    _buildSettingsToggle(),
-                    // Rozwinięte ustawienia zajmują miejsce listy i same się
-                    // przewijają, więc mieszczą się na każdym ekranie
-                    Expanded(
-                      child: _settingsExpanded
-                          ? _buildSettingsPanel()
-                          : isNightTime
-                          ? _buildStationList(routePoints, primaryActivePoint)
-                          : _buildOffHoursMessage(),
-                    ),
-                  ],
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: Scaffold(
+            backgroundColor: AppColors.background,
+            // Klawiatura przy edycji czasu zasłania listę zamiast ściskać układ
+            resizeToAvoidBottomInset: false,
+            body: Column(
+              children: [
+                AppHeader(
+                  version: _appVersion,
+                  settingsTooltip: _settingsExpanded
+                      ? 'Zwiń ustawienia'
+                      : 'Rozwiń ustawienia',
+                  onSettingsPressed: _toggleSettings,
                 ),
+                Expanded(
+                  child: SafeArea(
+                    top: false,
+                    child: Column(
+                      children: [
+                        if (_showAlertBanner) _buildAlertBanner(),
+                        _buildLineSelector(),
+                        _buildClock(),
+                        _buildActiveStation(primaryActivePoint),
+                        // Kierunek i obieg zmienia się tu tylko przy liście
+                        // stacji; poza nią wybór pokazuje karta ustawień
+                        if (isNightTime && !_settingsExpanded)
+                          _buildSelectionChips(),
+                        if (!_settingsExpanded) _buildSettingsToggle(),
+                        // Rozwinięte ustawienia zajmują miejsce listy i same
+                        // się przewijają, więc mieszczą się na każdym ekranie
+                        Expanded(
+                          child: _settingsExpanded
+                              ? _buildSettingsPanel()
+                              : isNightTime
+                              ? _buildStationList(
+                                  routePoints,
+                                  primaryActivePoint,
+                                )
+                              : _buildOffHoursMessage(),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        // Overlay przyciemniający ekran (na całej aplikacji)
+        if (_screenDimming > 0)
+          Positioned.fill(
+            child: IgnorePointer(
+              child: Container(
+                color: Colors.black.withValues(alpha: _screenDimming),
               ),
             ),
           ),
-          // Overlay przyciemniający ekran (na całej aplikacji)
-          if (_screenDimming > 0)
-            Positioned.fill(
-              child: IgnorePointer(
-                child: Container(
-                  color: Colors.black.withValues(alpha: _screenDimming),
-                ),
-              ),
-            ),
-        ],
-      ),
+      ],
     );
   }
 
   static const TextStyle _settingLabelStyle = TextStyle(
     fontSize: 15,
     color: AppColors.textPrimary,
-    fontWeight: FontWeight.w500,
+    fontWeight: FontWeight.bold,
+  );
+  // Podpisy przełączników i suwaków w ustawieniach
+  static const TextStyle _toggleLabelStyle = TextStyle(
+    fontSize: 15,
+    color: AppColors.primaryLight,
   );
   static const Widget _settingsDivider = Divider(
     height: 1,
     color: AppColors.border,
   );
-
-  // Nagłówek: logo, nazwa z numerem wersji i skrót do ustawień
-  Widget _buildHeader() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(16, 8, 4, 8),
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          colors: [AppColors.background, AppColors.headerGlow],
-        ),
-        border: Border(bottom: BorderSide(color: AppColors.border)),
-      ),
-      child: Stack(
-        alignment: Alignment.centerRight,
-        children: [
-          // Zarys pociągu w tle nagłówka
-          const Positioned(
-            right: 48,
-            child: Icon(
-              Icons.directions_subway_filled,
-              size: 60,
-              color: AppColors.headerArt,
-            ),
-          ),
-          Row(
-            children: [
-              Container(
-                width: 44,
-                height: 44,
-                alignment: Alignment.center,
-                decoration: const BoxDecoration(
-                  color: AppColors.primary,
-                  shape: BoxShape.circle,
-                ),
-                child: const Text(
-                  'M',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 26,
-                    fontWeight: FontWeight.w900,
-                    fontStyle: FontStyle.italic,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Text(
-                      'Metro',
-                      style: TextStyle(
-                        color: AppColors.textPrimary,
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                        height: 1.15,
-                      ),
-                    ),
-                    Text.rich(
-                      TextSpan(
-                        text: 'Jazdy Nocne',
-                        children: [
-                          if (_appVersion.isNotEmpty)
-                            TextSpan(
-                              text: '   v$_appVersion',
-                              style: const TextStyle(
-                                fontSize: 12,
-                                color: AppColors.textMuted,
-                              ),
-                            ),
-                        ],
-                      ),
-                      style: const TextStyle(
-                        color: AppColors.textSecondary,
-                        fontSize: 15,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              IconButton(
-                tooltip: _settingsExpanded
-                    ? 'Zwiń ustawienia'
-                    : 'Rozwiń ustawienia',
-                icon: const Icon(Icons.settings_outlined),
-                color: AppColors.textPrimary,
-                onPressed: _toggleSettings,
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
 
   // Banner alertu zbliżającego się odjazdu
   Widget _buildAlertBanner() {
@@ -590,7 +540,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         width: 84,
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: selected ? AppColors.primary : Colors.transparent,
+          gradient: selected
+              ? const LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [AppColors.primaryLight, AppColors.primary],
+                )
+              : null,
           borderRadius: BorderRadius.circular(20),
         ),
         child: Text(
@@ -638,35 +594,49 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         children: [
           if (_manualTimeMode) _buildManualTimeRow(),
           Stack(
-            alignment: Alignment.center,
+            alignment: Alignment.topCenter,
             children: [
-              GestureDetector(
-                onTap: _toggleManualTimeMode,
-                child: Text(
-                  '$hour:$minute:$second',
-                  style: TextStyle(
-                    fontSize: 54,
-                    fontWeight: FontWeight.w800,
-                    height: 1.1,
-                    color: _manualTimeMode
-                        ? AppColors.warning
-                        : AppColors.textPrimary,
-                    fontFeatures: const [FontFeature.tabularFigures()],
+              // Pusty wiersz rozciąga stos na całą szerokość, żeby przycisk
+              // „Edycja” trafił na prawą krawędź, a nie na krawędź zegara
+              const SizedBox(width: double.infinity),
+              // Odstęp u góry robi miejsce na przycisk „Edycja” nad zegarem
+              Padding(
+                padding: EdgeInsets.only(top: _manualTimeMode ? 0 : 16),
+                child: GestureDetector(
+                  onTap: _toggleManualTimeMode,
+                  child: Text(
+                    '$hour:$minute:$second',
+                    style: TextStyle(
+                      fontSize: 56,
+                      fontWeight: FontWeight.w800,
+                      height: 1.1,
+                      color: _manualTimeMode
+                          ? AppColors.warning
+                          : AppColors.textPrimary,
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                    ),
                   ),
                 ),
               ),
               if (!_manualTimeMode)
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: IconButton(
-                    tooltip: 'Edycja czasu',
-                    icon: const Icon(Icons.edit, size: 18),
-                    color: AppColors.textMuted,
+                Positioned(
+                  top: 0,
+                  right: 0,
+                  child: TextButton.icon(
                     onPressed: () {
                       setState(() {
                         _manualTimeMode = true;
                       });
                     },
+                    style: TextButton.styleFrom(
+                      foregroundColor: AppColors.textSecondary,
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      minimumSize: const Size(0, 28),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      textStyle: const TextStyle(fontSize: 13),
+                    ),
+                    icon: const Icon(Icons.edit, size: 15),
+                    label: const Text('Edycja'),
                   ),
                 ),
             ],
@@ -930,20 +900,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
-  // Karta zwijania ustawień
+  // Karta rozwijania ustawień (po rozwinięciu zastępuje ją panel ustawień)
   Widget _buildSettingsToggle() {
-    final expanded = _settingsExpanded;
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 6),
       child: Material(
-        // Po rozwinięciu karta ma wyraźny kolor, żeby „Zwiń ustawienia”
-        // nie ginęło wśród wierszy ustawień
-        color: expanded ? AppColors.primary : AppColors.surface,
+        color: AppColors.surface,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(14),
-          side: BorderSide(
-            color: expanded ? AppColors.primary : AppColors.border,
-          ),
+          side: const BorderSide(color: AppColors.border),
         ),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
@@ -952,10 +917,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             child: Row(
               children: [
-                Icon(
+                const Icon(
                   Icons.format_list_bulleted,
                   size: 22,
-                  color: expanded ? Colors.white : AppColors.primary,
+                  color: AppColors.textSecondary,
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -963,35 +928,37 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(
-                        expanded ? 'Zwiń ustawienia' : 'Rozwiń ustawienia',
-                        style: TextStyle(
-                          color: AppColors.textPrimary,
-                          fontSize: 15,
-                          fontWeight: expanded
-                              ? FontWeight.bold
-                              : FontWeight.w600,
-                        ),
+                      const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'Rozwiń ustawienia',
+                            style: TextStyle(
+                              color: AppColors.textPrimary,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          SizedBox(width: 6),
+                          Icon(
+                            Icons.keyboard_arrow_down,
+                            size: 20,
+                            color: AppColors.textSecondary,
+                          ),
+                        ],
                       ),
                       // Zapamiętany wybór widoczny bez rozwijania ustawień
-                      if (!expanded)
-                        Text(
-                          _selectionSummary(),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: AppColors.textSecondary,
-                            fontSize: 13,
-                          ),
+                      Text(
+                        _selectionSummary(),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 13,
                         ),
+                      ),
                     ],
                   ),
-                ),
-                Icon(
-                  expanded
-                      ? Icons.keyboard_arrow_up
-                      : Icons.keyboard_arrow_down,
-                  color: expanded ? Colors.white : AppColors.textSecondary,
                 ),
               ],
             ),
@@ -1012,195 +979,356 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   Widget _buildSettingRow(String label, Widget child) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       child: Row(
         children: [
-          SizedBox(width: 78, child: Text(label, style: _settingLabelStyle)),
+          SizedBox(width: 84, child: Text(label, style: _settingLabelStyle)),
           Expanded(child: child),
         ],
       ),
     );
   }
 
-  // Rozwinięte ustawienia
-  Widget _buildSettingsPanel() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+  // Dwupolowy wybór (dzień, kierunek) w kształcie pigułki
+  Widget _buildSegmented<T>({
+    required Map<T, String> options,
+    required T selected,
+    required IconData icon,
+    required Color selectedIconColor,
+    required ValueChanged<T> onChanged,
+  }) {
+    const radius = Radius.circular(21);
+    final values = options.keys.toList();
+    return SizedBox(
+      height: 42,
+      child: DecoratedBox(
         decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: AppColors.border),
+          borderRadius: const BorderRadius.all(radius),
+          border: Border.all(color: AppColors.borderStrong),
         ),
-        child: Column(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Wybór dnia (piątek / sobota-niedziela)
-            _buildSettingRow(
-              'Dzień',
-              SegmentedButton<DayType>(
-                showSelectedIcon: false,
-                segments: const [
-                  ButtonSegment(
-                    value: DayType.friday,
-                    label: Text('Piątek'),
-                    icon: Icon(Icons.nights_stay),
+            for (final value in values)
+              Expanded(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: value == selected ? null : () => onChanged(value),
+                  child: DecoratedBox(
+                    // Zaznaczone pole zakrywa obrys pigułki własnym, niebieskim
+                    decoration: value == selected
+                        ? BoxDecoration(
+                            color: AppColors.primarySurface,
+                            border: Border.all(color: AppColors.primary),
+                            borderRadius: BorderRadius.horizontal(
+                              left: value == values.first
+                                  ? radius
+                                  : Radius.zero,
+                              right: value == values.last
+                                  ? radius
+                                  : Radius.zero,
+                            ),
+                          )
+                        : const BoxDecoration(),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          icon,
+                          size: 18,
+                          color: value == selected
+                              ? selectedIconColor
+                              : AppColors.textMuted,
+                        ),
+                        const SizedBox(width: 6),
+                        Flexible(
+                          child: Text(
+                            options[value]!,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 15,
+                              color: value == selected
+                                  ? AppColors.textPrimary
+                                  : AppColors.textSecondary,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                  ButtonSegment(
-                    value: DayType.saturday,
-                    label: Text('Sobota'),
-                    icon: Icon(Icons.nights_stay),
-                  ),
-                ],
-                selected: {_dayType},
-                onSelectionChanged: (newSelection) {
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Pole wyboru obiegu
+  Widget _buildCircuitChip(int circuit) {
+    final selected = circuit == _selectedCircuit;
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: Material(
+        color: selected ? AppColors.primarySurface : Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10),
+          side: BorderSide(
+            color: selected ? AppColors.primary : AppColors.borderStrong,
+          ),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: selected
+              ? null
+              : () {
                   setState(() {
-                    _dayType = newSelection.first;
-                    _normalizeSelectedCircuit();
-                    _initialScrollDone = false;
-                    _lastActiveStationId = null;
+                    _selectedCircuit = circuit;
                   });
                   _saveSelection();
                 },
-              ),
-            ),
-            _settingsDivider,
-            // Wybór kierunku
-            _buildSettingRow(
-              'Kierunek',
-              SegmentedButton<Direction>(
-                showSelectedIcon: false,
-                segments: [
-                  for (final direction in Direction.values)
-                    ButtonSegment(
-                      value: direction,
-                      label: Text(_directionName(direction)),
-                      icon: const Icon(Icons.train),
-                    ),
+          child: Container(
+            height: 40,
+            constraints: const BoxConstraints(minWidth: 44),
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            alignment: Alignment.center,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (selected) ...[
+                  const Icon(Icons.check, size: 16, color: Colors.white),
+                  const SizedBox(width: 6),
                 ],
-                selected: {_direction},
-                onSelectionChanged: (newSelection) =>
-                    _setDirection(newSelection.first),
-              ),
-            ),
-            _settingsDivider,
-            // Wybór obiegu
-            _buildSettingRow(
-              'Obieg',
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: _getCurrentCircuits().map((circuit) {
-                    final isSelected = circuit == _selectedCircuit;
-                    return Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: ChoiceChip(
-                        label: Text('$circuit'),
-                        selected: isSelected,
-                        onSelected: (selected) {
-                          if (selected) {
-                            setState(() {
-                              _selectedCircuit = circuit;
-                            });
-                            _saveSelection();
-                          }
-                        },
-                      ),
-                    );
-                  }).toList(),
+                Text(
+                  '$circuit',
+                  style: TextStyle(
+                    fontSize: 15,
+                    color: AppColors.textPrimary,
+                    fontWeight: selected ? FontWeight.bold : FontWeight.w500,
+                  ),
                 ),
-              ),
+              ],
             ),
-            _settingsDivider,
-            // Przełącznik okna czasowego
-            Row(
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Rozwinięte ustawienia: stały wiersz zwijania i przewijana lista opcji
+  Widget _buildSettingsPanel() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+      child: Align(
+        alignment: Alignment.topCenter,
+        child: SizedBox(
+          width: double.infinity,
+          child: Material(
+            color: AppColors.surface,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+              side: const BorderSide(color: AppColors.border),
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.timelapse, size: 20, color: AppColors.primary),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text('Okno czasowe', style: _settingLabelStyle),
-                      Text(
-                        _showTimeWindow ? '-59s do +2:59' : 'Tylko godziny',
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: AppColors.textSecondary,
+                InkWell(
+                  onTap: _toggleSettings,
+                  child: const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 12),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          'Zwiń ustawienia',
+                          style: TextStyle(
+                            color: AppColors.textPrimary,
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
-                      ),
-                    ],
+                        SizedBox(width: 8),
+                        Icon(
+                          Icons.keyboard_arrow_up,
+                          color: AppColors.textPrimary,
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-                Switch(
-                  value: _showTimeWindow,
-                  onChanged: (value) {
-                    setState(() {
-                      _showTimeWindow = value;
-                    });
-                  },
-                ),
-              ],
-            ),
-            _settingsDivider,
-            // Przyciemnienie ekranu
-            Row(
-              children: [
-                const Icon(
-                  Icons.brightness_6,
-                  size: 20,
-                  color: AppColors.primary,
-                ),
-                const SizedBox(width: 10),
-                const Text('Przyciemnienie', style: _settingLabelStyle),
-                Expanded(
-                  child: Slider(
-                    value: _screenDimming,
-                    min: 0.0,
-                    max: 0.8,
-                    onChanged: (value) {
-                      setState(() {
-                        _screenDimming = value;
-                      });
-                    },
+                _settingsDivider,
+                Flexible(
+                  child: SingleChildScrollView(
+                    child: Column(children: _buildSettingsRows()),
                   ),
                 ),
               ],
             ),
-            _settingsDivider,
-            // Ekran zawsze włączony
-            Row(
-              children: [
-                const Icon(
-                  Icons.screen_lock_portrait,
-                  size: 20,
-                  color: AppColors.primary,
-                ),
-                const SizedBox(width: 10),
-                const Expanded(
-                  child: Text(
-                    'Ekran zawsze włączony',
-                    style: _settingLabelStyle,
-                  ),
-                ),
-                Switch(
-                  value: _keepScreenOn,
-                  onChanged: (value) {
-                    setState(() {
-                      _keepScreenOn = value;
-                      if (value) {
-                        WakelockPlus.enable();
-                      } else {
-                        WakelockPlus.disable();
-                      }
-                    });
-                  },
-                ),
-              ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  List<Widget> _buildSettingsRows() {
+    return [
+      // Wybór dnia (piątek / sobota-niedziela)
+      _buildSettingRow(
+        'Dzień:',
+        _buildSegmented<DayType>(
+          options: const {DayType.friday: 'Piątek', DayType.saturday: 'Sobota'},
+          selected: _dayType,
+          icon: Icons.nights_stay,
+          selectedIconColor: AppColors.primaryLight,
+          onChanged: (dayType) {
+            setState(() {
+              _dayType = dayType;
+              _normalizeSelectedCircuit();
+              _initialScrollDone = false;
+              _lastActiveStationId = null;
+            });
+            _saveSelection();
+          },
+        ),
+      ),
+      _settingsDivider,
+      // Wybór kierunku
+      _buildSettingRow(
+        'Kierunek:',
+        _buildSegmented<Direction>(
+          options: {
+            for (final direction in Direction.values)
+              direction: _directionName(direction),
+          },
+          selected: _direction,
+          icon: Icons.train,
+          selectedIconColor: AppColors.successBright,
+          onChanged: _setDirection,
+        ),
+      ),
+      _settingsDivider,
+      // Wybór obiegu
+      _buildSettingRow(
+        'Obieg:',
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: [
+              for (final circuit in _getCurrentCircuits())
+                _buildCircuitChip(circuit),
+            ],
+          ),
+        ),
+      ),
+      _settingsDivider,
+      const SizedBox(height: 6),
+      // Przełącznik okna czasowego
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Text('Okno czasowe', style: _toggleLabelStyle),
+            const SizedBox(width: 8),
+            Switch(
+              value: _showTimeWindow,
+              onChanged: (value) {
+                setState(() {
+                  _showTimeWindow = value;
+                });
+              },
             ),
-            _settingsDivider,
-            // Alert zbliżającego się odjazdu
+            const SizedBox(width: 8),
+            Flexible(
+              child: Text(
+                _showTimeWindow ? '(-59s do +2:59)' : '(tylko godziny)',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 13,
+                  color: AppColors.primaryLight,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+      // Przyciemnienie ekranu
+      Padding(
+        padding: const EdgeInsets.only(left: 14),
+        child: Row(
+          children: [
+            const Icon(
+              Icons.brightness_6,
+              size: 20,
+              color: AppColors.primaryLight,
+            ),
+            const SizedBox(width: 10),
+            const Text('Przyciemnienie', style: _toggleLabelStyle),
+            Expanded(
+              child: Slider(
+                value: _screenDimming,
+                min: 0.0,
+                max: 0.8,
+                onChanged: (value) {
+                  setState(() {
+                    _screenDimming = value;
+                  });
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+      // Ekran zawsze włączony
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(
+              Icons.screen_lock_portrait,
+              size: 20,
+              color: AppColors.primaryLight,
+            ),
+            const SizedBox(width: 10),
+            const Flexible(
+              child: Text(
+                'Ekran zawsze włączony',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: _toggleLabelStyle,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Switch(
+              value: _keepScreenOn,
+              onChanged: (value) {
+                setState(() {
+                  _keepScreenOn = value;
+                  if (value) {
+                    WakelockPlus.enable();
+                  } else {
+                    WakelockPlus.disable();
+                  }
+                });
+              },
+            ),
+          ],
+        ),
+      ),
+      const SizedBox(height: 6),
+      // Alert zbliżającego się odjazdu na wyróżnionym tle
+      Container(
+        width: double.infinity,
+        color: AppColors.dangerSurface,
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Column(
+          children: [
             Row(
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 const Icon(
                   Icons.notifications_active,
@@ -1208,10 +1336,18 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   color: AppColors.danger,
                 ),
                 const SizedBox(width: 10),
-                const Expanded(
-                  child: Text('Alert odjazdu', style: _settingLabelStyle),
+                const Text(
+                  'Alert odjazdu',
+                  style: TextStyle(fontSize: 15, color: AppColors.danger),
                 ),
-                if (_alertEnabled)
+                const SizedBox(width: 8),
+                Switch(
+                  value: _alertEnabled,
+                  activeThumbColor: AppColors.danger,
+                  onChanged: (value) => setState(() => _alertEnabled = value),
+                ),
+                if (_alertEnabled) ...[
+                  const SizedBox(width: 8),
                   Text(
                     '${_alertThresholdSeconds}s',
                     style: const TextStyle(
@@ -1220,11 +1356,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                Switch(
-                  value: _alertEnabled,
-                  activeThumbColor: AppColors.danger,
-                  onChanged: (value) => setState(() => _alertEnabled = value),
-                ),
+                ],
               ],
             ),
             if (_alertEnabled)
@@ -1241,7 +1373,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           ],
         ),
       ),
-    );
+    ];
   }
 
   // Lista stacji z przewijaniem do aktywnej
@@ -1289,36 +1421,59 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   // Komunikat poza godzinami nocnych kursów
   Widget _buildOffHoursMessage() {
-    return const Center(
-      child: SingleChildScrollView(
-        padding: EdgeInsets.all(32),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.nightlight_round, size: 80, color: AppColors.textMuted),
-            SizedBox(height: 24),
-            Text(
-              'Poza godzinami nocnych kursów',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: AppColors.textPrimary,
-              ),
-              textAlign: TextAlign.center,
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+      child: Container(
+        width: double.infinity,
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                // Księżyc z delikatnym cieniowaniem
+                ShaderMask(
+                  blendMode: BlendMode.srcIn,
+                  shaderCallback: (bounds) => const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [Color(0xFFC9D6EA), AppColors.textMuted],
+                  ).createShader(bounds),
+                  child: const Icon(Icons.nightlight_round, size: 76),
+                ),
+                const SizedBox(height: 24),
+                const Text(
+                  'Poza godzinami nocnych kursów',
+                  style: TextStyle(
+                    fontSize: 19,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textPrimary,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  'Nocne kursy metra odbywają się\nw godzinach 00:00 - 03:00\n(piątek/sobota i sobota/niedziela)',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: AppColors.textSecondary,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 24),
+                const Text(
+                  'Użyj edycji czasu powyżej,\naby przetestować rozkład',
+                  style: TextStyle(fontSize: 12, color: AppColors.primary),
+                  textAlign: TextAlign.center,
+                ),
+              ],
             ),
-            SizedBox(height: 12),
-            Text(
-              'Nocne kursy metra odbywają się\nw godzinach 00:00 - 03:00\n(piątek/sobota i sobota/niedziela)',
-              style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
-              textAlign: TextAlign.center,
-            ),
-            SizedBox(height: 24),
-            Text(
-              'Stuknij zegar albo ołówek obok niego,\naby przetestować rozkład',
-              style: TextStyle(fontSize: 12, color: AppColors.primary),
-              textAlign: TextAlign.center,
-            ),
-          ],
+          ),
         ),
       ),
     );

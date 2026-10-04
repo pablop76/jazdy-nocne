@@ -285,6 +285,7 @@ class RoutePointCard extends StatelessWidget {
       case TimeWindowStatus.activeSecondary:
         return _buildStatusPill(
           'W OKNIE',
+          icon: Icons.update,
           background: AppColors.warning,
           foreground: Colors.black,
         );
@@ -301,6 +302,7 @@ class RoutePointCard extends StatelessWidget {
 
   Widget _buildStatusPill(
     String label, {
+    IconData? icon,
     required Color background,
     required Color foreground,
   }) {
@@ -310,9 +312,18 @@ class RoutePointCard extends StatelessWidget {
         color: background,
         borderRadius: BorderRadius.circular(20),
       ),
-      child: Text(
-        label,
-        style: TextStyle(color: foreground, fontWeight: FontWeight.bold),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (icon != null) ...[
+            Icon(icon, size: 16, color: foreground),
+            const SizedBox(width: 4),
+          ],
+          Text(
+            label,
+            style: TextStyle(color: foreground, fontWeight: FontWeight.bold),
+          ),
+        ],
       ),
     );
   }
@@ -321,14 +332,14 @@ class RoutePointCard extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        const Icon(Icons.access_time, size: 16, color: AppColors.primary),
+        const Icon(Icons.access_time, size: 17, color: AppColors.primary),
         const SizedBox(width: 4),
         Text(
           _formatTimeRemaining(seconds),
           style: const TextStyle(
             color: AppColors.primary,
-            fontWeight: FontWeight.w600,
-            fontSize: 14,
+            fontWeight: FontWeight.bold,
+            fontSize: 15,
           ),
         ),
       ],
