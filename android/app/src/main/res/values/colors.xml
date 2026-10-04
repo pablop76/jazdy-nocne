@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="ic_launcher_background">#1565C0</color>
+    <!-- Tło ekranu startowego: to samo co tło aplikacji -->
+    <color name="splash_background">#0A1220</color>
 </resources>

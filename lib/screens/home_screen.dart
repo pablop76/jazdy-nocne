@@ -11,6 +11,7 @@ import '../data/route_data.dart';
 import '../data/route_data_m2.dart';
 import '../models/route_point.dart';
 import '../services/direction_service.dart';
+import '../services/schedule_day.dart';
 import '../services/update_service.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_header.dart';
@@ -28,10 +29,14 @@ enum MetroLine { m1, m2 }
 
 class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   static const double _cardHeight = 120.0; // Stała wysokość karty
-  // Klucze zapamiętanego wyboru (linia, dzień, obieg)
+  // Klucze zapamiętanego wyboru (linia, obieg) i ustawień
   static const String _prefLine = 'metro_line';
-  static const String _prefDayType = 'day_type';
   static const String _prefCircuit = 'circuit';
+  static const String _prefTimeWindow = 'time_window';
+  static const String _prefDimming = 'screen_dimming';
+  static const String _prefKeepScreenOn = 'keep_screen_on';
+  static const String _prefAlertEnabled = 'alert_enabled';
+  static const String _prefAlertThreshold = 'alert_threshold';
   late Timer _timer;
   final ScrollController _scrollController = ScrollController();
   final TextEditingController _hourController = TextEditingController();
@@ -39,12 +44,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   final AudioPlayer _audioPlayer =
       AudioPlayer(); // Player do dźwięku powitalnego
   final FlutterTts _tts = FlutterTts();
-  // Aktualny czas (rzeczywisty)
+  // Czas pokazywany przez aplikację: zegar telefonu plus przesunięcie testowe
   DateTime _currentTime = DateTime.now();
+  // Przesunięcie czasu testowego; zero oznacza czas rzeczywisty
+  Duration _timeOffset = Duration.zero;
   MetroLine _metroLine = MetroLine.m1;
   // Kierunek nie jest wybierany: wynika z rozkładu obiegu i godziny
   Direction _direction = Direction.mlociny;
-  DayType _dayType = DayType.saturday; // Piątek lub Sobota/Niedziela
+  // Rozkład piątkowy albo sobotni; domyślnie według daty
+  DayType _dayType = ScheduleDay.forTime(DateTime.now());
+  // Dzień ostatnio ustawiony automatycznie na podstawie daty
+  DayType _autoDayType = ScheduleDay.forTime(DateTime.now());
   int _selectedCircuit = 1;
   bool _showTimeWindow = true; // Przełącznik okna czasowego
   bool _settingsExpanded =
@@ -72,13 +82,20 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _tts.setLanguage('pl-PL');
     _tts.setSpeechRate(0.45);
     _tts.setVolume(1.0);
-    _hourController.text = _currentTime.hour.toString().padLeft(2, '0');
-    _minuteController.text = _currentTime.minute.toString().padLeft(2, '0');
-    _restoreSelection();
+    _restoreSettings();
     _loadAppVersion();
     _checkForUpdate();
-    // Aktualizuj czas co sekundę
-    _timer = Timer.periodic(const Duration(seconds: 1), (_) => _tick());
+    _scheduleTick();
+  }
+
+  // Budzi zegar tuż po zmianie sekundy, żeby sekundy na ekranie zmieniały się
+  // równo z zegarem telefonu
+  void _scheduleTick() {
+    final shown = DateTime.now().add(_timeOffset);
+    _timer = Timer(Duration(milliseconds: 1010 - shown.millisecond), () {
+      _tick();
+      if (mounted) _scheduleTick();
+    });
   }
 
   @override
@@ -96,40 +113,62 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
   // Obsługa zmiany stanu aplikacji (np. pauza/wznowienie)
 
-  // Kolejna sekunda zegara
+  // Odświeżenie zegara. Czas zawsze pochodzi z zegara telefonu, więc pauza
+  // aplikacji ani zgubione takty timera nie powodują spóźnienia.
   void _tick() {
     if (!mounted) return;
+    final now = DateTime.now().add(_timeOffset);
+    // Przerysowanie tylko wtedy, gdy zmieniła się sekunda
+    if (now.millisecondsSinceEpoch ~/ 1000 ==
+        _currentTime.millisecondsSinceEpoch ~/ 1000) {
+      return;
+    }
     setState(() {
-      _currentTime = _currentTime.add(const Duration(seconds: 1));
+      _currentTime = now;
+      _syncDayWithCalendar();
       _syncDirectionWithTime();
     });
     _checkAndTriggerAlert();
   }
 
-  // Przywróć wybór z poprzedniego uruchomienia aplikacji
-  Future<void> _restoreSelection() async {
+  // Przywróć wybór i ustawienia z poprzedniego uruchomienia aplikacji
+  Future<void> _restoreSettings() async {
     final prefs = await SharedPreferences.getInstance();
     if (!mounted) return;
     setState(() {
       _metroLine =
           MetroLine.values.asNameMap()[prefs.getString(_prefLine)] ??
           _metroLine;
-      _dayType =
-          DayType.values.asNameMap()[prefs.getString(_prefDayType)] ?? _dayType;
       _selectedCircuit = prefs.getInt(_prefCircuit) ?? _selectedCircuit;
+      _showTimeWindow = prefs.getBool(_prefTimeWindow) ?? _showTimeWindow;
+      _screenDimming = (prefs.getDouble(_prefDimming) ?? _screenDimming)
+          .clamp(0.0, 0.8)
+          .toDouble();
+      _keepScreenOn = prefs.getBool(_prefKeepScreenOn) ?? _keepScreenOn;
+      _alertEnabled = prefs.getBool(_prefAlertEnabled) ?? _alertEnabled;
+      _alertThresholdSeconds =
+          (prefs.getInt(_prefAlertThreshold) ?? _alertThresholdSeconds)
+              .clamp(10, 120)
+              .toInt();
       _normalizeSelectedCircuit();
       _initialScrollDone = false;
       _lastActiveStationId = null;
       _syncDirectionWithTime();
     });
+    if (!_keepScreenOn) WakelockPlus.disable();
   }
 
-  // Zapamiętaj wybór, żeby nie ustawiać go od nowa po ponownym uruchomieniu
-  Future<void> _saveSelection() async {
+  // Zapamiętaj wybór i ustawienia, żeby nie ustawiać ich od nowa po ponownym
+  // uruchomieniu. Dnia i kierunku tu nie ma: wynikają z daty i rozkładu.
+  Future<void> _saveSettings() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_prefLine, _metroLine.name);
-    await prefs.setString(_prefDayType, _dayType.name);
     await prefs.setInt(_prefCircuit, _selectedCircuit);
+    await prefs.setBool(_prefTimeWindow, _showTimeWindow);
+    await prefs.setDouble(_prefDimming, _screenDimming);
+    await prefs.setBool(_prefKeepScreenOn, _keepScreenOn);
+    await prefs.setBool(_prefAlertEnabled, _alertEnabled);
+    await prefs.setInt(_prefAlertThreshold, _alertThresholdSeconds);
   }
 
   Future<void> _loadAppVersion() async {
@@ -246,11 +285,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         : RouteDataM2.getRoute(direction, _dayType);
   }
 
-  // Kierunek, w którym wybrany obieg jedzie o aktualnej godzinie
-  Direction? _scheduledDirection() {
-    final runs = DirectionService.runsFor({
+  // Kursy wybranego obiegu w obu kierunkach, w kolejności odjazdów
+  List<CircuitRun> _circuitRuns() {
+    return DirectionService.runsFor({
       for (final direction in Direction.values) direction: _routeFor(direction),
     }, _selectedCircuit);
+  }
+
+  // Kierunek, w którym wybrany obieg jedzie o aktualnej godzinie
+  Direction? _scheduledDirection() {
+    final runs = _circuitRuns();
     if (runs.isEmpty) return null;
     final direction = DirectionService.directionAt(runs, _currentTime);
     if (direction != null) return direction;
@@ -268,6 +312,24 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _initialScrollDone = false;
     _lastActiveStationId = null;
   }
+
+  // Ustawia rozkład piątkowy albo sobotni według daty z zegara telefonu.
+  // Robi to tylko wtedy, gdy zaczyna się kolejna doba rozkładowa, więc dzień
+  // wybrany ręcznie (np. na noc z osobnym rozkładem) zostaje do tego momentu.
+  // Wywoływać wewnątrz setState.
+  void _syncDayWithCalendar() {
+    final scheduled = ScheduleDay.forTime(DateTime.now());
+    if (scheduled == _autoDayType) return;
+    _autoDayType = scheduled;
+    if (scheduled == _dayType) return;
+    _dayType = scheduled;
+    _normalizeSelectedCircuit();
+    _initialScrollDone = false;
+    _lastActiveStationId = null;
+  }
+
+  // Czy zegar pokazuje czas testowy zamiast czasu telefonu
+  bool get _isTestTime => _timeOffset != Duration.zero;
 
   List<int> _getCurrentCircuits() {
     if (_metroLine == MetroLine.m1) {
@@ -414,6 +476,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
     final isNightTime = _isNightServiceTime();
     final primaryActivePoint = _computePrimaryActivePoint(routePoints);
+    // Kurs, który trwa albo zaraz ruszy, i ten po nim
+    final runs = _circuitRuns();
+    final currentRun = DirectionService.runAt(runs, _currentTime);
+    final nextIndex = currentRun == null ? -1 : runs.indexOf(currentRun) + 1;
+    final nextRun = nextIndex > 0 && nextIndex < runs.length
+        ? runs[nextIndex]
+        : null;
 
     return Stack(
       children: [
@@ -450,12 +519,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         Expanded(
                           child: _settingsExpanded
                               ? _buildSettingsPanel()
-                              : isNightTime
-                              ? _buildStationList(
+                              : !isNightTime
+                              ? _buildOffHoursMessage()
+                              : currentRun == null && runs.isNotEmpty
+                              ? _buildCircuitFinishedMessage(runs.last)
+                              : _buildStationList(
                                   routePoints,
                                   primaryActivePoint,
-                                )
-                              : _buildOffHoursMessage(),
+                                  nextRun,
+                                ),
                         ),
                       ],
                     ),
@@ -595,10 +667,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       _lastActiveStationId = null;
       _syncDirectionWithTime();
     });
-    _saveSelection();
+    _saveSettings();
   }
 
-  // Zegar; stuknięcie przełącza tryb ręcznego ustawiania czasu
+  // Zegar; stuknięcie otwiera i zamyka pola ręcznego ustawiania czasu
   Widget _buildClock() {
     final hour = _currentTime.hour.toString().padLeft(2, '0');
     final minute = _currentTime.minute.toString().padLeft(2, '0');
@@ -608,6 +680,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          if (_isTestTime) _buildTestTimeBar(),
           if (_manualTimeMode) _buildManualTimeRow(),
           Stack(
             alignment: Alignment.topCenter,
@@ -626,7 +699,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       fontSize: 56,
                       fontWeight: FontWeight.w800,
                       height: 1.1,
-                      color: _manualTimeMode
+                      // Pomarańczowy zegar to czas testowy albo jego ustawianie
+                      color: _manualTimeMode || _isTestTime
                           ? AppColors.warning
                           : AppColors.textPrimary,
                       fontFeatures: const [FontFeature.tabularFigures()],
@@ -639,11 +713,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   top: 0,
                   right: 0,
                   child: TextButton.icon(
-                    onPressed: () {
-                      setState(() {
-                        _manualTimeMode = true;
-                      });
-                    },
+                    onPressed: _toggleManualTimeMode,
                     style: TextButton.styleFrom(
                       foregroundColor: AppColors.textSecondary,
                       padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -658,6 +728,51 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             ],
           ),
         ],
+      ),
+    );
+  }
+
+  // Pasek czasu testowego; stuknięcie wraca do zegara telefonu
+  Widget _buildTestTimeBar() {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Material(
+        color: AppColors.warningSurface,
+        shape: const StadiumBorder(side: BorderSide(color: AppColors.warning)),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: _resetToRealTime,
+          child: const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'CZAS TESTOWY',
+                  style: TextStyle(
+                    color: AppColors.warning,
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                SizedBox(width: 10),
+                Icon(Icons.restore, size: 16, color: AppColors.textPrimary),
+                SizedBox(width: 4),
+                Flexible(
+                  child: Text(
+                    'wróć do rzeczywistego',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: AppColors.textPrimary,
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -721,6 +836,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
+  // Ustawia czas testowy: zegar idzie dalej od podanej godziny, a aplikacja
+  // pamięta tylko przesunięcie względem zegara telefonu
   void _applyManualTime() {
     final hour = int.tryParse(_hourController.text);
     final minute = int.tryParse(_minuteController.text);
@@ -732,39 +849,53 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         minute > 59) {
       return;
     }
+    final phoneNow = DateTime.now();
+    final target = DateTime(
+      phoneNow.year,
+      phoneNow.month,
+      phoneNow.day,
+      hour,
+      minute,
+    );
     setState(() {
-      _currentTime = DateTime(
-        _currentTime.year,
-        _currentTime.month,
-        _currentTime.day,
-        hour,
-        minute,
-        0,
-      );
+      _timeOffset = target.difference(phoneNow);
+      _currentTime = target;
       _manualTimeMode = false; // zamknij panel edycji
-      _hourController.text = hour.toString().padLeft(2, '0');
-      _minuteController.text = minute.toString().padLeft(2, '0');
       _syncDirectionWithTime();
     });
-    _restartClock();
+    _realignClock();
     FocusScope.of(context).unfocus();
   }
 
+  // Koniec czasu testowego: zegar znów pokazuje czas telefonu
+  void _resetToRealTime() {
+    setState(() {
+      _timeOffset = Duration.zero;
+      _currentTime = DateTime.now();
+      _manualTimeMode = false;
+      _syncDirectionWithTime();
+    });
+    _realignClock();
+    FocusScope.of(context).unfocus();
+  }
+
+  // Po zmianie przesunięcia sekundy wypadają w innym momencie, więc budzik
+  // zegara trzeba nastawić od nowa
+  void _realignClock() {
+    _timer.cancel();
+    _scheduleTick();
+  }
+
+  // Pokazuje albo chowa pola ustawiania czasu; zegar chodzi przez cały czas
   void _toggleManualTimeMode() {
     setState(() {
       _manualTimeMode = !_manualTimeMode;
+      if (_manualTimeMode) {
+        _hourController.text = _currentTime.hour.toString().padLeft(2, '0');
+        _minuteController.text = _currentTime.minute.toString().padLeft(2, '0');
+      }
     });
-    if (_manualTimeMode) {
-      _timer.cancel();
-    } else {
-      _restartClock();
-    }
-  }
-
-  // Uruchom od nowa odliczanie sekund
-  void _restartClock() {
-    _timer.cancel();
-    _timer = Timer.periodic(const Duration(seconds: 1), (_) => _tick());
+    if (!_manualTimeMode) FocusScope.of(context).unfocus();
   }
 
   // Aktywna stacja z godziną odjazdu albo informacja o braku okna
@@ -1074,7 +1205,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     _selectedCircuit = circuit;
                     _syncDirectionWithTime();
                   });
-                  _saveSelection();
+                  _saveSettings();
                 },
           child: Container(
             height: 40,
@@ -1178,7 +1309,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               _lastActiveStationId = null;
               _syncDirectionWithTime();
             });
-            _saveSelection();
+            _saveSettings();
           },
         ),
       ),
@@ -1239,6 +1370,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 setState(() {
                   _showTimeWindow = value;
                 });
+                _saveSettings();
               },
             ),
             const SizedBox(width: 8),
@@ -1278,6 +1410,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     _screenDimming = value;
                   });
                 },
+                onChangeEnd: (_) => _saveSettings(),
               ),
             ),
           ],
@@ -1315,6 +1448,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     WakelockPlus.disable();
                   }
                 });
+                _saveSettings();
               },
             ),
           ],
@@ -1345,7 +1479,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 Switch(
                   value: _alertEnabled,
                   activeThumbColor: AppColors.danger,
-                  onChanged: (value) => setState(() => _alertEnabled = value),
+                  onChanged: (value) {
+                    setState(() => _alertEnabled = value);
+                    _saveSettings();
+                  },
                 ),
                 if (_alertEnabled) ...[
                   const SizedBox(width: 8),
@@ -1370,6 +1507,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 label: '${_alertThresholdSeconds}s',
                 onChanged: (value) =>
                     setState(() => _alertThresholdSeconds = value.round()),
+                onChangeEnd: (_) => _saveSettings(),
               ),
           ],
         ),
@@ -1381,6 +1519,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Widget _buildStationList(
     List<RoutePoint> routePoints,
     RoutePoint? primaryActivePoint,
+    CircuitRun? nextRun,
   ) {
     // Znajdź indeks aktywnej stacji
     int activeIndex = -1;
@@ -1420,8 +1559,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       controller: _scrollController,
       itemExtent: _cardHeight,
       padding: const EdgeInsets.only(bottom: 8),
-      itemCount: routePoints.length,
+      // Ostatnia pozycja to zapowiedź następnego kursu
+      itemCount: routePoints.length + 1,
       itemBuilder: (context, index) {
+        if (index == routePoints.length) return _buildNextRunCard(nextRun);
         return RoutePointCard(
           point: routePoints[index],
           currentTime: _currentTime,
@@ -1434,8 +1575,85 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
+  // Karta na końcu listy: następny kurs obiegu albo informacja, że to ostatni
+  Widget _buildNextRunCard(CircuitRun? nextRun) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            nextRun == null ? Icons.flag_outlined : Icons.swap_vert,
+            color: AppColors.textSecondary,
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  nextRun == null ? 'Koniec kursów' : 'Następny kurs',
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+                Text(
+                  nextRun == null
+                      ? 'To ostatni kurs obiegu $_selectedCircuit'
+                      : 'Odjazd ${DirectionService.formatMinutes(nextRun.start)} · '
+                            '${nextRun.startStation} → '
+                            '${_directionName(nextRun.direction)}',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   // Komunikat poza godzinami nocnych kursów
   Widget _buildOffHoursMessage() {
+    return _buildMessageCard(
+      icon: Icons.nightlight_round,
+      title: 'Poza godzinami nocnych kursów',
+      text:
+          'Nocne kursy metra odbywają się\nw godzinach 00:00 - 03:00\n(piątek/sobota i sobota/niedziela)',
+      hint: 'Użyj edycji czasu powyżej,\naby przetestować rozkład',
+    );
+  }
+
+  // Komunikat po ostatnim kursie obiegu: nie ma już czego pilnować
+  Widget _buildCircuitFinishedMessage(CircuitRun lastRun) {
+    return _buildMessageCard(
+      icon: Icons.flag_outlined,
+      title: 'Obieg $_selectedCircuit zakończył kursy',
+      text:
+          'Ostatni przyjazd: ${DirectionService.formatMinutes(lastRun.end)}\n${lastRun.endStation}',
+    );
+  }
+
+  // Karta z komunikatem zamiast listy stacji
+  Widget _buildMessageCard({
+    required IconData icon,
+    required String title,
+    required String text,
+    String? hint,
+  }) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
       child: Container(
@@ -1451,7 +1669,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                // Księżyc z delikatnym cieniowaniem
+                // Ikona z delikatnym cieniowaniem
                 ShaderMask(
                   blendMode: BlendMode.srcIn,
                   shaderCallback: (bounds) => const LinearGradient(
@@ -1459,12 +1677,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     end: Alignment.bottomRight,
                     colors: [Color(0xFFC9D6EA), AppColors.textMuted],
                   ).createShader(bounds),
-                  child: const Icon(Icons.nightlight_round, size: 76),
+                  child: Icon(icon, size: 76),
                 ),
                 const SizedBox(height: 24),
-                const Text(
-                  'Poza godzinami nocnych kursów',
-                  style: TextStyle(
+                Text(
+                  title,
+                  style: const TextStyle(
                     fontSize: 19,
                     fontWeight: FontWeight.bold,
                     color: AppColors.textPrimary,
@@ -1472,20 +1690,25 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 12),
-                const Text(
-                  'Nocne kursy metra odbywają się\nw godzinach 00:00 - 03:00\n(piątek/sobota i sobota/niedziela)',
-                  style: TextStyle(
+                Text(
+                  text,
+                  style: const TextStyle(
                     fontSize: 14,
                     color: AppColors.textSecondary,
                   ),
                   textAlign: TextAlign.center,
                 ),
-                const SizedBox(height: 24),
-                const Text(
-                  'Użyj edycji czasu powyżej,\naby przetestować rozkład',
-                  style: TextStyle(fontSize: 12, color: AppColors.primary),
-                  textAlign: TextAlign.center,
-                ),
+                if (hint != null) ...[
+                  const SizedBox(height: 24),
+                  Text(
+                    hint,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: AppColors.primary,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
               ],
             ),
           ),

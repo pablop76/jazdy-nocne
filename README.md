@@ -7,12 +7,14 @@ Aplikacja ułatwiająca trzymanie czasu odjazdu zgodnie z rozkładem jazd nocnyc
 ## Funkcje
 
 - Nocne rozkłady linii M1 i M2 na piątek i sobotę
-- Wybór linii, dnia i obiegu; aplikacja zapamiętuje wybór do następnego uruchomienia
+- Wybór linii i obiegu; aplikacja zapamiętuje wybór do następnego uruchomienia
+- Rozkład piątkowy albo sobotni ustawia się sam według daty; można go przełączyć ręcznie
 - Kierunek wynika z rozkładu: aplikacja pokazuje kurs, który wybrany obieg właśnie jedzie albo zaraz zacznie, i sama przełącza listę stacji na kurs powrotny
-- Odliczanie czasu do odjazdu i podświetlenie aktywnej stacji
+- Odliczanie czasu do odjazdu, podświetlenie aktywnej stacji i czas do końca okna, w którym nie ma odchyłki od rozkładu
+- Zapowiedź następnego kursu na końcu listy stacji i komunikat po ostatnim kursie obiegu
 - Alert zbliżającego się odjazdu: baner i komunikat głosowy, od 10 do 120 sekund przed odjazdem
-- Ręczne ustawianie czasu, żeby sprawdzić rozkład poza godzinami kursów
-- Przyciemnianie ekranu i blokada wygaszania
+- Czas testowy, żeby sprawdzić rozkład poza godzinami kursów: wyraźnie oznaczony, z powrotem do czasu rzeczywistego jednym stuknięciem
+- Przyciemnianie ekranu i blokada wygaszania; ustawienia są zapamiętywane
 - Sprawdzanie przy starcie, czy jest nowsza wersja
 
 ## Instalacja

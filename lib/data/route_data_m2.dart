@@ -82,6 +82,54 @@ class RouteDataM2 {
     'C4': ['00:41', '00:56', '01:11', '01:26', '01:41', '01:56', '02:11', '02:26', '02:41'],
   };
 
+  // Pierwsze odjazdy i ostatnie przejazdy według tabeli dla maszynistów
+  // ważnej od 02.09.2024. Kolejność w wierszu: pierwszy pn.-pt., pierwszy
+  // w sobotę, pierwszy w niedzielę, ostatni pon.-czw./niedz./święto,
+  // ostatni w piątek i sobotę.
+  // Kierunek Bródno
+  static const Map<String, List<String>> brodnoFirstLast = {
+    'C4': ['05:00', '05:00', '05:00', '00:18', '02:13'],
+    'C5': ['05:02', '05:02', '05:02', '00:20', '02:15'],
+    'C6': ['05:00', '05:00', '05:00', '00:22', '02:17'],
+    'C7': ['05:02', '05:02', '05:02', '00:24', '02:19'],
+    'C8': ['05:04', '05:04', '05:04', '00:26', '02:21'],
+    'C9': ['05:00', '05:00', '05:00', '00:28', '02:23'],
+    'C10': ['05:02', '05:02', '05:02', '00:30', '02:25'],
+    'C11': ['05:04', '05:04', '05:04', '00:32', '02:27'],
+    'C12': ['05:05', '05:05', '05:05', '00:33', '02:28'],
+    'C13': ['05:07', '05:07', '05:07', '00:35', '02:30'],
+    'C14': ['05:09', '05:09', '05:09', '00:37', '02:32'],
+    'C15': ['05:11', '05:11', '05:11', '00:39', '02:34'],
+    'C16': ['05:13', '05:13', '05:13', '00:41', '02:36'],
+    'C17': ['05:15', '05:15', '05:15', '00:43', '02:38'],
+    'C18': ['05:17', '05:10', '05:00', '00:45', '02:40'],
+    'C19': ['05:19', '05:12', '05:02', '00:47', '02:42'],
+    'C20': ['05:21', '05:14', '05:04', '00:49', '02:44'],
+    'C21': ['05:23', '05:16', '05:06', '00:51', '02:46'],
+  };
+
+  // Kierunek Bemowo
+  static const Map<String, List<String>> bemowoFirstLast = {
+    'C21': ['05:00', '05:00', '05:00', '00:13', '02:08'],
+    'C20': ['05:02', '05:02', '05:02', '00:15', '02:10'],
+    'C19': ['05:04', '05:04', '05:04', '00:17', '02:12'],
+    'C18': ['05:00', '05:06', '05:06', '00:19', '02:14'],
+    'C17': ['05:02', '05:08', '05:08', '00:21', '02:16'],
+    'C16': ['05:04', '05:10', '05:10', '00:23', '02:18'],
+    'C15': ['05:00', '05:00', '05:00', '00:25', '02:20'],
+    'C14': ['05:02', '05:02', '05:02', '00:27', '02:22'],
+    'C13': ['05:04', '05:04', '05:04', '00:29', '02:24'],
+    'C12': ['05:06', '05:06', '05:06', '00:31', '02:26'],
+    'C11': ['05:07', '05:07', '05:07', '00:32', '02:27'],
+    'C10': ['05:09', '05:09', '05:09', '00:34', '02:29'],
+    'C9': ['05:00', '05:11', '05:11', '00:36', '02:31'],
+    'C8': ['05:02', '05:13', '05:13', '00:38', '02:33'],
+    'C7': ['05:04', '05:15', '05:15', '00:40', '02:35'],
+    'C6': ['05:06', '05:17', '05:17', '00:42', '02:37'],
+    'C5': ['05:08', '05:19', '05:19', '00:44', '02:39'],
+    'C4': ['05:10', '05:21', '05:21', '00:46', '02:41'],
+  };
+
   // Przypisanie obiegów do slotów godzinowych (piątek / sobota)
   static const List<int> brodnoCircuitsFriday = [10, 11, 1, 3, 5, 7, 10, 11, 1];
   static const List<int> brodnoCircuitsSaturday = [7, 9, 10, 2, 3, 5, 7, 9, 10];
@@ -106,6 +154,7 @@ class RouteDataM2 {
     final isToBemowo = direction == Direction.mlociny;
     final stations = isToBemowo ? stationsToBemowo : stationsToBrodno;
     final timesMap = isToBemowo ? bemowoTimes : brodnoTimes;
+    final firstLastMap = isToBemowo ? bemowoFirstLast : brodnoFirstLast;
     final circuits = _getCircuitSequence(direction, dayType);
 
     return stations.map((stationId) {
@@ -124,11 +173,18 @@ class RouteDataM2 {
         }
       }
 
+      final firstLast = firstLastMap[stationId];
+
       return RoutePoint(
         stationId: stationId,
         name: stationNames[stationId] ?? stationId,
         scheduleByCircuit: firstByCircuit,
         secondScheduleByCircuit: secondByCircuit.isEmpty ? null : secondByCircuit,
+        firstDepartureMonThu: firstLast?[0],
+        firstDepartureSat: firstLast?[1],
+        firstDepartureSun: firstLast?[2],
+        lastDepartureMonThu: firstLast?[3],
+        lastDepartureFriSat: firstLast?[4],
       );
     }).toList();
   }

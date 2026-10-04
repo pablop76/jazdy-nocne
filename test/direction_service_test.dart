@@ -38,6 +38,37 @@ void main() {
     test('obieg bez kursów daje pustą listę', () {
       expect(m1(2), isEmpty);
     });
+
+    test('kurs zna stację początkową, końcową i godziny', () {
+      final second = m1(1)[1];
+      expect(second.startStation, 'A23 - Młociny');
+      expect(second.endStation, 'A1 - Kabaty');
+      expect(DirectionService.formatMinutes(second.start), '01:03');
+      expect(DirectionService.formatMinutes(second.end), '01:41');
+    });
+  });
+
+  group('DirectionService.runAt', () {
+    test('między kursami wskazuje ten, który ruszy jako następny', () {
+      final runs = m1(1);
+      expect(DirectionService.runAt(runs, at(0, 55)), same(runs[1]));
+    });
+
+    test('po ostatnim kursie nie ma żadnego', () {
+      expect(DirectionService.runAt(m1(1), at(2, 38)), isNull);
+    });
+  });
+
+  group('RoutePoint.secondsToWindowEnd', () {
+    test('okno kończy się 2:59 po godzinie rozkładowej', () {
+      // Obieg 1 odjeżdża z A1 Kabaty o 00:12
+      final kabaty = RouteData.getRoute(
+        Direction.mlociny,
+        DayType.saturday,
+      ).first;
+      expect(kabaty.secondsToWindowEnd(at(0, 12), 1), 179);
+      expect(kabaty.secondsToWindowEnd(at(0, 14, 59), 1), 0);
+    });
   });
 
   group('DirectionService.directionAt', () {

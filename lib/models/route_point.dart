@@ -6,6 +6,8 @@ class RoutePoint {
   final Map<int, String>? secondScheduleByCircuit; // Obieg -> godzina "HH:mm" (drugi kurs)
   final String? firstDepartureMonThu;
   final String? firstDepartureFriSat;
+  final String? firstDepartureSat; // M2: pierwszy odjazd w sobotę
+  final String? firstDepartureSun; // M2: pierwszy odjazd w niedzielę
   final String? lastDepartureMonThu;
   final String? lastDepartureFriSat;
 
@@ -16,6 +18,8 @@ class RoutePoint {
     this.secondScheduleByCircuit,
     this.firstDepartureMonThu,
     this.firstDepartureFriSat,
+    this.firstDepartureSat,
+    this.firstDepartureSun,
     this.lastDepartureMonThu,
     this.lastDepartureFriSat,
   });
@@ -133,6 +137,11 @@ class RoutePoint {
     final scheduled = DateTime(now.year, now.month, now.day, hour, minute);
 
     return scheduled.difference(now).inSeconds;
+  }
+
+  /// Ile sekund zostało do końca okna czasowego najbliższego kursu
+  int secondsToWindowEnd(DateTime now, int circuit) {
+    return secondsToScheduled(now, circuit) + 179;
   }
 }
 

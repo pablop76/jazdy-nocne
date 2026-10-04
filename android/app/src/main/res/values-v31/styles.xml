@@ -4,6 +4,7 @@
          więc nie zależy od trybu jasnego ani ciemnego w systemie. -->
     <style name="LaunchTheme" parent="@android:style/Theme.Black.NoTitleBar">
         <item name="android:windowBackground">@drawable/launch_background</item>
+        <item name="android:windowSplashScreenBackground">@color/splash_background</item>
     </style>
     <!-- Motyw okna po uruchomieniu procesu: widać go, zanim Flutter narysuje
          pierwszą klatkę, i pod interfejsem aplikacji. -->

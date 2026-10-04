@@ -117,8 +117,32 @@ class RoutePointCard extends StatelessWidget {
       dimmed: false,
       emphasized: isActiveStatus,
       scheduledTime: scheduledTime,
-      trailing: _buildStatusWidget(status, secondsTo),
+      trailing: isActiveStatus
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _buildStatusWidget(status, secondsTo),
+                const SizedBox(height: 6),
+                // Ile zostało do końca okna, w którym nie ma odchyłki
+                Text(
+                  'do końca okna ${_formatWindowLeft(point.secondsToWindowEnd(currentTime, circuit))}',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textSecondary,
+                    fontFeatures: [FontFeature.tabularFigures()],
+                  ),
+                ),
+              ],
+            )
+          : _buildStatusWidget(status, secondsTo),
     );
+  }
+
+  // Czas do końca okna w postaci 2:15
+  String _formatWindowLeft(int seconds) {
+    final left = seconds < 0 ? 0 : seconds;
+    return '${left ~/ 60}:${(left % 60).toString().padLeft(2, '0')}';
   }
 
   /// Karta stacji: kolorowy pasek statusu, numer, nazwa, godziny i status
@@ -204,6 +228,18 @@ class RoutePointCard extends StatelessWidget {
                                   _getEarliestTime(point.firstDepartureMonThu))
                             _buildDepartureLine(
                               'Pierwszy (pt-sb): ${_getEarliestTime(point.firstDepartureFriSat)}',
+                              dimmed
+                                  ? AppColors.textMuted
+                                  : AppColors.successBright,
+                            ),
+                          // M2: sobota i niedziela, gdy różnią się od dni roboczych
+                          if (point.firstDepartureSat != null &&
+                              (point.firstDepartureSat !=
+                                      point.firstDepartureMonThu ||
+                                  point.firstDepartureSun !=
+                                      point.firstDepartureMonThu))
+                            _buildDepartureLine(
+                              'Pierwszy (sb / nd): ${point.firstDepartureSat} / ${point.firstDepartureSun}',
                               dimmed
                                   ? AppColors.textMuted
                                   : AppColors.successBright,

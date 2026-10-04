@@ -6,11 +6,15 @@ class CircuitRun {
     required this.direction,
     required this.start,
     required this.end,
+    required this.startStation,
+    required this.endStation,
   });
 
   final Direction direction;
   final int start; // minuty od północy
   final int end;
+  final String startStation; // nazwa stacji, z której kurs rusza
+  final String endStation;
 }
 
 /// Ustalanie, w którą stronę obieg jedzie o danej godzinie
@@ -26,11 +30,12 @@ class DirectionService {
   ) {
     final runs = <CircuitRun>[];
     routes.forEach((direction, points) {
-      _addRun(runs, direction, points.map((p) => p.getScheduledTime(circuit)));
+      _addRun(runs, direction, points, (p) => p.getScheduledTime(circuit));
       _addRun(
         runs,
         direction,
-        points.map((p) => p.getSecondScheduledTime(circuit)),
+        points,
+        (p) => p.getSecondScheduledTime(circuit),
       );
     });
     runs.sort((a, b) => a.start.compareTo(b.start));
@@ -40,27 +45,47 @@ class DirectionService {
   static void _addRun(
     List<CircuitRun> runs,
     Direction direction,
-    Iterable<String?> times,
+    List<RoutePoint> points,
+    String? Function(RoutePoint) timeOf,
   ) {
-    final minutes = [
-      for (final time in times)
-        if (time != null) _toMinutes(time),
-    ]..sort();
-    if (minutes.isEmpty) return;
+    // Stacje kursu z godzinami, od najwcześniejszej
+    final stops = [
+      for (final point in points)
+        if (timeOf(point) case final time?) (_toMinutes(time), point.name),
+    ]..sort((a, b) => a.$1.compareTo(b.$1));
+    if (stops.isEmpty) return;
     runs.add(
-      CircuitRun(direction: direction, start: minutes.first, end: minutes.last),
+      CircuitRun(
+        direction: direction,
+        start: stops.first.$1,
+        end: stops.last.$1,
+        startStation: stops.first.$2,
+        endStation: stops.last.$2,
+      ),
     );
   }
 
-  /// Kierunek kursu, który trwa albo ruszy jako następny.
+  /// Kurs, który trwa albo ruszy jako następny.
   /// Zwraca null, gdy wszystkie kursy już minęły albo obieg nie ma kursów.
-  static Direction? directionAt(List<CircuitRun> runs, DateTime now) {
+  static CircuitRun? runAt(List<CircuitRun> runs, DateTime now) {
     final seconds = now.hour * 3600 + now.minute * 60 + now.second;
     for (final run in runs) {
       // Kurs trwa do końca okna czasowego ostatniej stacji
-      if (seconds <= run.end * 60 + _windowAfterSeconds) return run.direction;
+      if (seconds <= run.end * 60 + _windowAfterSeconds) return run;
     }
     return null;
+  }
+
+  /// Kierunek kursu, który trwa albo ruszy jako następny
+  static Direction? directionAt(List<CircuitRun> runs, DateTime now) {
+    return runAt(runs, now)?.direction;
+  }
+
+  /// Minuty od północy zapisane jako godzina, np. 78 -> 01:18
+  static String formatMinutes(int minutes) {
+    final hour = (minutes ~/ 60).toString().padLeft(2, '0');
+    final minute = (minutes % 60).toString().padLeft(2, '0');
+    return '$hour:$minute';
   }
 
   static int _toMinutes(String time) {
