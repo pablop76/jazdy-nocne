@@ -28,10 +28,9 @@ enum MetroLine { m1, m2 }
 
 class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   static const double _cardHeight = 120.0; // Stała wysokość karty
-  // Klucze zapamiętanego wyboru (linia, dzień, kierunek, obieg)
+  // Klucze zapamiętanego wyboru (linia, dzień, obieg)
   static const String _prefLine = 'metro_line';
   static const String _prefDayType = 'day_type';
-  static const String _prefDirection = 'direction';
   static const String _prefCircuit = 'circuit';
   late Timer _timer;
   final ScrollController _scrollController = ScrollController();
@@ -43,9 +42,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   // Aktualny czas (rzeczywisty)
   DateTime _currentTime = DateTime.now();
   MetroLine _metroLine = MetroLine.m1;
+  // Kierunek nie jest wybierany: wynika z rozkładu obiegu i godziny
   Direction _direction = Direction.mlociny;
-  // Kierunek ostatnio ustawiony automatycznie na podstawie godziny
-  Direction? _autoDirection;
   DayType _dayType = DayType.saturday; // Piątek lub Sobota/Niedziela
   int _selectedCircuit = 1;
   bool _showTimeWindow = true; // Przełącznik okna czasowego
@@ -101,12 +99,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   // Kolejna sekunda zegara
   void _tick() {
     if (!mounted) return;
-    var directionChanged = false;
     setState(() {
       _currentTime = _currentTime.add(const Duration(seconds: 1));
-      directionChanged = _syncDirectionWithTime();
+      _syncDirectionWithTime();
     });
-    if (directionChanged) _saveSelection();
     _checkAndTriggerAlert();
   }
 
@@ -120,15 +116,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           _metroLine;
       _dayType =
           DayType.values.asNameMap()[prefs.getString(_prefDayType)] ?? _dayType;
-      _direction =
-          Direction.values.asNameMap()[prefs.getString(_prefDirection)] ??
-          _direction;
       _selectedCircuit = prefs.getInt(_prefCircuit) ?? _selectedCircuit;
       _normalizeSelectedCircuit();
       _initialScrollDone = false;
       _lastActiveStationId = null;
-      // Zapamiętany kierunek ustępuje temu, który wynika z godziny
-      _syncDirectionWithTime(force: true);
+      _syncDirectionWithTime();
     });
   }
 
@@ -137,7 +129,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_prefLine, _metroLine.name);
     await prefs.setString(_prefDayType, _dayType.name);
-    await prefs.setString(_prefDirection, _direction.name);
     await prefs.setInt(_prefCircuit, _selectedCircuit);
   }
 
@@ -268,21 +259,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     return _isNightServiceTime() ? null : runs.first.direction;
   }
 
-  // Ustawia kierunek według godziny i zwraca true, jeśli go zmienił.
-  // Bez [force] robi to tylko w chwili, gdy obieg zaczyna kurs w drugą
-  // stronę, więc ręcznie wybrany kierunek zostaje do tego momentu.
-  // Wywoływać wewnątrz setState.
-  bool _syncDirectionWithTime({bool force = false}) {
+  // Ustawia kierunek zgodnie z rozkładem. Wywoływać wewnątrz setState.
+  void _syncDirectionWithTime() {
     final scheduled = _scheduledDirection();
-    if (scheduled == null) return false;
-    if (!force && scheduled == _autoDirection) return false;
-    _autoDirection = scheduled;
-    if (_direction == scheduled) return false;
+    if (scheduled == null || scheduled == _direction) return;
     _direction = scheduled;
     _normalizeSelectedCircuit();
     _initialScrollDone = false;
     _lastActiveStationId = null;
-    return true;
   }
 
   List<int> _getCurrentCircuits() {
@@ -606,21 +590,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   void _setLine(MetroLine line) {
     setState(() {
       _metroLine = line;
-      _direction = Direction.mlociny;
       _normalizeSelectedCircuit();
       _initialScrollDone = false;
       _lastActiveStationId = null;
-      _syncDirectionWithTime(force: true);
-    });
-    _saveSelection();
-  }
-
-  void _setDirection(Direction direction) {
-    setState(() {
-      _direction = direction;
-      _normalizeSelectedCircuit();
-      _initialScrollDone = false;
-      _lastActiveStationId = null;
+      _syncDirectionWithTime();
     });
     _saveSelection();
   }
@@ -771,7 +744,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       _manualTimeMode = false; // zamknij panel edycji
       _hourController.text = hour.toString().padLeft(2, '0');
       _minuteController.text = minute.toString().padLeft(2, '0');
-      _syncDirectionWithTime(force: true);
+      _syncDirectionWithTime();
     });
     _restartClock();
     FocusScope.of(context).unfocus();
@@ -862,33 +835,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
-  // Pigułki z kierunkiem (z szybką zmianą) i obiegiem
+  // Pigułki z kierunkiem i obiegiem
   Widget _buildSelectionChips() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Flexible(
-            child: PopupMenuButton<Direction>(
-              tooltip: 'Zmień kierunek',
-              initialValue: _direction,
-              color: AppColors.surfaceHigh,
-              onSelected: _setDirection,
-              itemBuilder: (context) => [
-                for (final direction in Direction.values)
-                  PopupMenuItem(
-                    value: direction,
-                    child: Text(_directionName(direction)),
-                  ),
-              ],
-              child: _buildChip(
-                'Kierunek:',
-                _directionName(_direction),
-                trailing: Icons.keyboard_arrow_down,
-              ),
-            ),
-          ),
+          Flexible(child: _buildChip('Kierunek:', _directionName(_direction))),
           const SizedBox(width: 12),
           _buildChip('Obieg:', '$_selectedCircuit'),
         ],
@@ -896,7 +850,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
-  Widget _buildChip(String label, String value, {IconData? trailing}) {
+  Widget _buildChip(String label, String value) {
     return Container(
       height: 38,
       padding: const EdgeInsets.symmetric(horizontal: 14),
@@ -928,10 +882,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               ),
             ),
           ),
-          if (trailing != null) ...[
-            const SizedBox(width: 6),
-            Icon(trailing, size: 18, color: AppColors.textSecondary),
-          ],
         ],
       ),
     );
@@ -1026,7 +976,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
-  // Dwupolowy wybór (dzień, kierunek) w kształcie pigułki
+  // Dwupolowy wybór w kształcie pigułki
   Widget _buildSegmented<T>({
     required Map<T, String> options,
     required T selected,
@@ -1122,7 +1072,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               : () {
                   setState(() {
                     _selectedCircuit = circuit;
-                    _syncDirectionWithTime(force: true);
+                    _syncDirectionWithTime();
                   });
                   _saveSelection();
                 },
@@ -1226,25 +1176,37 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               _normalizeSelectedCircuit();
               _initialScrollDone = false;
               _lastActiveStationId = null;
-              _syncDirectionWithTime(force: true);
+              _syncDirectionWithTime();
             });
             _saveSelection();
           },
         ),
       ),
       _settingsDivider,
-      // Wybór kierunku
+      // Kierunek wynika z rozkładu, więc jest tu tylko informacją
       _buildSettingRow(
         'Kierunek:',
-        _buildSegmented<Direction>(
-          options: {
-            for (final direction in Direction.values)
-              direction: _directionName(direction),
-          },
-          selected: _direction,
-          icon: Icons.train,
-          selectedIconColor: AppColors.successBright,
-          onChanged: _setDirection,
+        Row(
+          children: [
+            const Icon(Icons.train, size: 18, color: AppColors.successBright),
+            const SizedBox(width: 6),
+            Text(
+              _directionName(_direction),
+              style: const TextStyle(
+                fontSize: 15,
+                color: AppColors.textPrimary,
+              ),
+            ),
+            const SizedBox(width: 8),
+            const Flexible(
+              child: Text(
+                'według rozkładu',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+              ),
+            ),
+          ],
         ),
       ),
       _settingsDivider,
