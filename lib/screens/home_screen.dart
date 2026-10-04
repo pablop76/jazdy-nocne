@@ -1269,27 +1269,33 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                InkWell(
-                  onTap: _toggleSettings,
-                  child: const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 12),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          'Zwiń ustawienia',
-                          style: TextStyle(
-                            color: AppColors.textPrimary,
-                            fontSize: 15,
-                            fontWeight: FontWeight.bold,
-                          ),
+                // Pełny przycisk w kolorze akcentu, żeby nie ginął wśród opcji
+                Padding(
+                  padding: const EdgeInsets.all(10),
+                  child: Material(
+                    color: AppColors.primary,
+                    borderRadius: BorderRadius.circular(10),
+                    clipBehavior: Clip.antiAlias,
+                    child: InkWell(
+                      onTap: _toggleSettings,
+                      child: const SizedBox(
+                        height: 46,
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.keyboard_arrow_up, color: Colors.white),
+                            SizedBox(width: 6),
+                            Text(
+                              'Zwiń ustawienia',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
                         ),
-                        SizedBox(width: 8),
-                        Icon(
-                          Icons.keyboard_arrow_up,
-                          color: AppColors.textPrimary,
-                        ),
-                      ],
+                      ),
                     ),
                   ),
                 ),
