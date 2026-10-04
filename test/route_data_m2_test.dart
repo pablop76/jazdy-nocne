@@ -10,36 +10,41 @@ void main() {
     DayType.friday,
   ).firstWhere((point) => point.stationId == id);
 
-  group('RouteDataM2: pierwsze odjazdy i ostatnie przejazdy', () {
-    test('kierunek Bródno, C18: inaczej w dni robocze, sobotę i niedzielę', () {
+  group('RouteDataM2: pierwsze i ostatnie odjazdy', () {
+    test('kierunek Bródno, C18', () {
       final c18 = station(Direction.kabaty, 'C18');
       expect(c18.firstDepartureMonThu, '05:17');
-      expect(c18.firstDepartureSat, '05:10');
-      expect(c18.firstDepartureSun, '05:00');
       expect(c18.lastDepartureMonThu, '00:45');
       expect(c18.lastDepartureFriSat, '02:40');
     });
 
-    test('kierunek Bemowo, C18: w weekend pierwszy jest pociąg z C21', () {
-      final c18 = station(Direction.mlociny, 'C18');
-      expect(c18.firstDepartureMonThu, '05:00');
-      expect(c18.firstDepartureSat, '05:06');
-      expect(c18.firstDepartureSun, '05:06');
+    test('kierunek Bemowo, C9: pierwszy pociąg rusza ze stacji pośredniej', () {
+      final c9 = station(Direction.mlociny, 'C9');
+      expect(c9.firstDepartureMonThu, '05:00');
+      expect(c9.lastDepartureMonThu, '00:36');
+      expect(c9.lastDepartureFriSat, '02:31');
     });
 
-    test('kierunek Bemowo, C4: ostatnia stacja kursu', () {
-      final c4 = station(Direction.mlociny, 'C4');
-      expect(c4.firstDepartureMonThu, '05:10');
-      expect(c4.firstDepartureSat, '05:21');
-      expect(c4.lastDepartureMonThu, '00:46');
-      expect(c4.lastDepartureFriSat, '02:41');
+    test('ostatni odjazd w piątek i sobotę to ostatni kurs nocny', () {
+      for (final direction in Direction.values) {
+        final times = direction == Direction.mlociny
+            ? RouteDataM2.bemowoTimes
+            : RouteDataM2.brodnoTimes;
+        for (final point in RouteDataM2.getRoute(direction, DayType.friday)) {
+          expect(
+            point.lastDepartureFriSat,
+            times[point.stationId]!.last,
+            reason: point.name,
+          );
+        }
+      }
     });
 
     test('każda stacja w obu kierunkach ma komplet godzin', () {
       for (final direction in Direction.values) {
         for (final point in RouteDataM2.getRoute(direction, DayType.friday)) {
           expect(point.firstDepartureMonThu, isNotNull, reason: point.name);
-          expect(point.lastDepartureFriSat, isNotNull, reason: point.name);
+          expect(point.lastDepartureMonThu, isNotNull, reason: point.name);
         }
       }
     });

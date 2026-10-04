@@ -6,8 +6,6 @@ class RoutePoint {
   final Map<int, String>? secondScheduleByCircuit; // Obieg -> godzina "HH:mm" (drugi kurs)
   final String? firstDepartureMonThu;
   final String? firstDepartureFriSat;
-  final String? firstDepartureSat; // M2: pierwszy odjazd w sobotę
-  final String? firstDepartureSun; // M2: pierwszy odjazd w niedzielę
   final String? lastDepartureMonThu;
   final String? lastDepartureFriSat;
 
@@ -18,8 +16,6 @@ class RoutePoint {
     this.secondScheduleByCircuit,
     this.firstDepartureMonThu,
     this.firstDepartureFriSat,
-    this.firstDepartureSat,
-    this.firstDepartureSun,
     this.lastDepartureMonThu,
     this.lastDepartureFriSat,
   });

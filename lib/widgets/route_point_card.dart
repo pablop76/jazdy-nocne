@@ -232,18 +232,6 @@ class RoutePointCard extends StatelessWidget {
                                   ? AppColors.textMuted
                                   : AppColors.successBright,
                             ),
-                          // M2: sobota i niedziela, gdy różnią się od dni roboczych
-                          if (point.firstDepartureSat != null &&
-                              (point.firstDepartureSat !=
-                                      point.firstDepartureMonThu ||
-                                  point.firstDepartureSun !=
-                                      point.firstDepartureMonThu))
-                            _buildDepartureLine(
-                              'Pierwszy (sb / nd): ${point.firstDepartureSat} / ${point.firstDepartureSun}',
-                              dimmed
-                                  ? AppColors.textMuted
-                                  : AppColors.successBright,
-                            ),
                           if (point.lastDepartureMonThu != null ||
                               point.lastDepartureFriSat != null)
                             _buildDepartureLine(
