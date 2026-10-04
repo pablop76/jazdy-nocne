@@ -10,6 +10,7 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 import '../data/route_data.dart';
 import '../data/route_data_m2.dart';
 import '../models/route_point.dart';
+import '../services/direction_service.dart';
 import '../services/update_service.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_header.dart';
@@ -43,6 +44,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   DateTime _currentTime = DateTime.now();
   MetroLine _metroLine = MetroLine.m1;
   Direction _direction = Direction.mlociny;
+  // Kierunek ostatnio ustawiony automatycznie na podstawie godziny
+  Direction? _autoDirection;
   DayType _dayType = DayType.saturday; // Piątek lub Sobota/Niedziela
   int _selectedCircuit = 1;
   bool _showTimeWindow = true; // Przełącznik okna czasowego
@@ -77,14 +80,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _loadAppVersion();
     _checkForUpdate();
     // Aktualizuj czas co sekundę
-    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (mounted) {
-        setState(() {
-          _currentTime = _currentTime.add(const Duration(seconds: 1));
-        });
-        _checkAndTriggerAlert();
-      }
-    });
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) => _tick());
   }
 
   @override
@@ -101,6 +97,18 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     super.dispose();
   }
   // Obsługa zmiany stanu aplikacji (np. pauza/wznowienie)
+
+  // Kolejna sekunda zegara
+  void _tick() {
+    if (!mounted) return;
+    var directionChanged = false;
+    setState(() {
+      _currentTime = _currentTime.add(const Duration(seconds: 1));
+      directionChanged = _syncDirectionWithTime();
+    });
+    if (directionChanged) _saveSelection();
+    _checkAndTriggerAlert();
+  }
 
   // Przywróć wybór z poprzedniego uruchomienia aplikacji
   Future<void> _restoreSelection() async {
@@ -119,6 +127,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       _normalizeSelectedCircuit();
       _initialScrollDone = false;
       _lastActiveStationId = null;
+      // Zapamiętany kierunek ustępuje temu, który wynika z godziny
+      _syncDirectionWithTime(force: true);
     });
   }
 
@@ -199,9 +209,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   void _checkAndTriggerAlert() {
     if (!_alertEnabled || !_disclaimerAccepted) return;
-    final routePoints = _metroLine == MetroLine.m1
-        ? RouteData.getRoute(_direction, _dayType)
-        : RouteDataM2.getRoute(_direction, _dayType);
+    final routePoints = _routeFor(_direction);
     final primaryPoint = _computePrimaryActivePoint(routePoints);
     if (primaryPoint == null) return;
     final secondsTo = primaryPoint.secondsToScheduled(
@@ -238,6 +246,43 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final hour = _currentTime.hour;
     // Nocne kursy: od 00:00 do około 03:00
     return hour >= 0 && hour < 4;
+  }
+
+  // Stacje wybranej linii i dnia w podanym kierunku
+  List<RoutePoint> _routeFor(Direction direction) {
+    return _metroLine == MetroLine.m1
+        ? RouteData.getRoute(direction, _dayType)
+        : RouteDataM2.getRoute(direction, _dayType);
+  }
+
+  // Kierunek, w którym wybrany obieg jedzie o aktualnej godzinie
+  Direction? _scheduledDirection() {
+    final runs = DirectionService.runsFor({
+      for (final direction in Direction.values) direction: _routeFor(direction),
+    }, _selectedCircuit);
+    if (runs.isEmpty) return null;
+    final direction = DirectionService.directionAt(runs, _currentTime);
+    if (direction != null) return direction;
+    // Po ostatnim kursie kierunek zostaje bez zmian, a w dzień aplikacja
+    // ustawia się na pierwszy kurs najbliższej nocy
+    return _isNightServiceTime() ? null : runs.first.direction;
+  }
+
+  // Ustawia kierunek według godziny i zwraca true, jeśli go zmienił.
+  // Bez [force] robi to tylko w chwili, gdy obieg zaczyna kurs w drugą
+  // stronę, więc ręcznie wybrany kierunek zostaje do tego momentu.
+  // Wywoływać wewnątrz setState.
+  bool _syncDirectionWithTime({bool force = false}) {
+    final scheduled = _scheduledDirection();
+    if (scheduled == null) return false;
+    if (!force && scheduled == _autoDirection) return false;
+    _autoDirection = scheduled;
+    if (_direction == scheduled) return false;
+    _direction = scheduled;
+    _normalizeSelectedCircuit();
+    _initialScrollDone = false;
+    _lastActiveStationId = null;
+    return true;
   }
 
   List<int> _getCurrentCircuits() {
@@ -379,10 +424,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   Widget _buildMainScreen() {
-    // Stacje dla wybranej linii, kierunku i dnia
-    final routePoints = _metroLine == MetroLine.m1
-        ? RouteData.getRoute(_direction, _dayType)
-        : RouteDataM2.getRoute(_direction, _dayType);
+    final routePoints = _routeFor(_direction);
 
     _normalizeSelectedCircuit();
 
@@ -568,6 +610,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       _normalizeSelectedCircuit();
       _initialScrollDone = false;
       _lastActiveStationId = null;
+      _syncDirectionWithTime(force: true);
     });
     _saveSelection();
   }
@@ -728,6 +771,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       _manualTimeMode = false; // zamknij panel edycji
       _hourController.text = hour.toString().padLeft(2, '0');
       _minuteController.text = minute.toString().padLeft(2, '0');
+      _syncDirectionWithTime(force: true);
     });
     _restartClock();
     FocusScope.of(context).unfocus();
@@ -747,14 +791,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   // Uruchom od nowa odliczanie sekund
   void _restartClock() {
     _timer.cancel();
-    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (mounted) {
-        setState(() {
-          _currentTime = _currentTime.add(const Duration(seconds: 1));
-        });
-        _checkAndTriggerAlert();
-      }
-    });
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) => _tick());
   }
 
   // Aktywna stacja z godziną odjazdu albo informacja o braku okna
@@ -1085,6 +1122,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               : () {
                   setState(() {
                     _selectedCircuit = circuit;
+                    _syncDirectionWithTime(force: true);
                   });
                   _saveSelection();
                 },
@@ -1188,6 +1226,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               _normalizeSelectedCircuit();
               _initialScrollDone = false;
               _lastActiveStationId = null;
+              _syncDirectionWithTime(force: true);
             });
             _saveSelection();
           },
@@ -1397,6 +1436,20 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         _initialScrollDone = true;
         WidgetsBinding.instance.addPostFrameCallback((_) {
           _scrollToActiveStation(activeIndex);
+        });
+      }
+    } else if (!_initialScrollDone) {
+      // Bez aktywnej stacji (np. tuż po zmianie kierunku) pokaż najbliższy
+      // odjazd zamiast miejsca, w którym lista stała wcześniej
+      _initialScrollDone = true;
+      final nextIndex = routePoints.indexWhere(
+        (point) =>
+            point.getTimeWindowStatus(_currentTime, _selectedCircuit) ==
+            TimeWindowStatus.upcoming,
+      );
+      if (nextIndex >= 0) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _scrollToActiveStation(nextIndex);
         });
       }
     }
